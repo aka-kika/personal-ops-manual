@@ -63,7 +63,11 @@ place to look instead of five browser tabs.
 
 ## Install
 
-Download the zip from Releases, unzip, drop the app into `/Applications`.
+```bash
+brew install --cask aka-kika/tap/personal-ops-manual
+```
+
+Or download the zip from Releases, unzip, drop the app into `/Applications`.
 Or build it: `./build.sh --install` (ad hoc signed, for the machine you
 build on).
 

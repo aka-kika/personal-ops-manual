@@ -10,6 +10,7 @@ cd "$(dirname "$0")"
 
 # Signing identity comes from the environment or a git-ignored release.env next to this script:
 #   OPS_TEAM_ID=XXXXXXXXXX   OPS_SIGNING_NAME="Your Name"   OPS_NOTARY_PROFILE=ops-manual-notary
+#   OPS_TAP_DIR=/path/to/homebrew-tap   (optional: --publish also bumps the cask there)
 [[ -f release.env ]] && source release.env
 TEAM_ID="${OPS_TEAM_ID:?set OPS_TEAM_ID (Apple Team ID)}"
 IDENTITY="Developer ID Application: ${OPS_SIGNING_NAME:?set OPS_SIGNING_NAME (name on the certificate)} ($TEAM_ID)"
@@ -66,6 +67,16 @@ for arg in "$@"; do
       gh release create "v$VERSION" "$ZIP" --title "Personal Ops Manual $VERSION" \
         --notes "Notarized Developer ID build. Unzip and drop into /Applications. macOS 26 or newer." \
         || echo "gh release create failed (does v$VERSION already exist?)"
+      # Homebrew cask: OPS_TAP_DIR in release.env points at a local clone of the
+      # tap that serves the cask; version and sha256 are rewritten and pushed.
+      if [[ -n "${OPS_TAP_DIR:-}" && -f "$OPS_TAP_DIR/Casks/personal-ops-manual.rb" ]]; then
+        SHA=$(shasum -a 256 "$ZIP" | cut -d' ' -f1)
+        sed -i '' -e "s/^  version \".*\"/  version \"$VERSION\"/" \
+                  -e "s/^  sha256 \".*\"/  sha256 \"$SHA\"/" "$OPS_TAP_DIR/Casks/personal-ops-manual.rb"
+        git -C "$OPS_TAP_DIR" add Casks/personal-ops-manual.rb
+        git -C "$OPS_TAP_DIR" commit -q -m "personal-ops-manual $VERSION" && git -C "$OPS_TAP_DIR" push -q \
+          && echo "Cask updated: personal-ops-manual $VERSION" || echo "Cask update failed; fix the tap by hand"
+      fi
       ;;
   esac
 done
