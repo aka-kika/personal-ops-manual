@@ -1,0 +1,12 @@
+{
+  "name": "personal-ops-manual-mcp",
+  "version": "2.1.1",
+  "private": true,
+  "type": "module",
+  "description": "Read-only stdio MCP server over the Personal Ops Manual folder",
+  "bin": { "personal-ops-manual-mcp": "server.mjs" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.25.76"
+  }
+}

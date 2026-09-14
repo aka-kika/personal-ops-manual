@@ -1,0 +1,12 @@
+*.xcodeproj
+build/
+DerivedData/
+.DS_Store
+xcuserdata/
+mcp/node_modules/
+release.env
+.superpowers/
+docs/superpowers/
+NOTES.md
+GATE.md
+skill/KIKA-WEEKLY-MAINTENANCE.md

@@ -1,0 +1,11 @@
+Stdio MCP server, read-only on pages. Tools: list_categories, list_documents (category, limit, offset), search_documents (ranked), get_document, get_stale (re-verification queue), report_change (readers file a report to the operator's inbox), list_reports.
+
+The server lives at mcp/server.mjs in the repo you cloned; run `npm install` inside mcp/ once. Replace /path/to/ops-manual below. Node 18 or newer.
+
+Claude Code:
+  claude mcp add --scope user personal-ops-manual -- node /path/to/ops-manual/mcp/server.mjs
+
+JSON (Claude Desktop, Cursor, and most other clients):
+  "personal-ops-manual": { "command": "node", "args": ["/path/to/ops-manual/mcp/server.mjs"] }
+
+The server reads the pages folder from the app's setting (defaults read com.kikalab.opsmanual documentsPath), or the OPS_MANUAL_DIR environment variable, or ~/Documents/Personal Ops Manual.

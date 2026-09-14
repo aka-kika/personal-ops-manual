@@ -1,0 +1,86 @@
+name: OpsManual
+options:
+  bundleIdPrefix: com.kikalab
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+packages:
+  swift-markdown:
+    url: https://github.com/swiftlang/swift-markdown
+    from: "0.8.0"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    PRODUCT_NAME: Personal Ops Manual
+    MARKETING_VERSION: "2.1.1"
+    CURRENT_PROJECT_VERSION: "4"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    ENABLE_HARDENED_RUNTIME: NO
+    ENABLE_APP_SANDBOX: NO
+    COMBINE_HIDPI_IMAGES: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+targets:
+  OpsManual:
+    type: application
+    platform: macOS
+    sources:
+      - path: OpsManual
+        excludes: ["**/.DS_Store", "Resources/skill/**", "Resources/mcp-install.txt"]
+      - path: OpsManual/Resources/skill
+        type: folder
+        buildPhase: resources
+      - path: OpsManual/Resources/mcp-install.txt
+        buildPhase: resources
+    dependencies:
+      - package: swift-markdown
+        product: Markdown
+    settings:
+      base:
+        PRODUCT_MODULE_NAME: OpsManual
+        PRODUCT_BUNDLE_IDENTIFIER: com.kikalab.opsmanual
+        INFOPLIST_FILE: OpsManual/Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: OpsManual/Resources/Info.plist
+      properties:
+        CFBundleName: Personal Ops Manual
+        CFBundleDisplayName: Personal Ops Manual
+        CFBundleShortVersionString: "2.1.1"
+        CFBundleVersion: "4"
+        LSMinimumSystemVersion: "26.0"
+        NSHighResolutionCapable: true
+        NSPrincipalClass: NSApplication
+        CFBundlePackageType: APPL
+        CFBundleURLTypes:
+          - CFBundleURLName: com.kikalab.opsmanual
+            CFBundleURLSchemes: [opsmanual]
+  OpsManualTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [OpsManualTests]
+    dependencies:
+      - target: OpsManual
+    settings:
+      base:
+        PRODUCT_NAME: OpsManualTests
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.kikalab.opsmanual.tests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Personal Ops Manual.app/Contents/MacOS/Personal Ops Manual"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  OpsManual:
+    build:
+      targets:
+        OpsManual: all
+        OpsManualTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [OpsManualTests]
+    archive:
+      config: Release
