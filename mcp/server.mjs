@@ -184,7 +184,7 @@ function summarize(doc) {
 
 // ── Server ──────────────────────────────────────────────────────────────
 
-const server = new McpServer({ name: "personal-ops-manual", version: "2.1.1" });
+const server = new McpServer({ name: "personal-ops-manual", version: "2.1.2" });
 
 const VERIFIED_RE = /^>\s*\*\*Verified\*\*\s*(\d{4}-\d{2}-\d{2})/m;
 const UNCHECKED_RE = /^\s*[-*+]\s+\[ \]\s+(.+)$/gm;
@@ -379,11 +379,11 @@ server.registerTool(
   {
     title: "Report a change to the operator",
     description:
-      "For readers. Tell the operator that something in the setup changed or a page looks stale. Appends one dated line to _inbox/reports.md in the documents folder; it never edits a page. Say who you are, which page (title or id, or 'none' for a missing page), what changed in one sentence, and what you saw that proves it.",
+      "For readers. Report a mismatch between a page and the machine so the operator can fix the page. Read the page first (search_documents, then get_document). Appends one dated line to _inbox/reports.md in the documents folder; it never edits a page. If the page already says it, do not report; news about the project is not a report unless a page contradicts it.",
     inputSchema: {
       agent: z.string().min(1).describe("Your name, e.g. goose, cursor, aka"),
-      page: z.string().min(1).describe("Page title or id this is about, or 'none' if no page covers it yet"),
-      what: z.string().min(1).describe("What changed or what is wrong, one sentence"),
+      page: z.string().min(1).describe("Title or id of the page you read; 'none' only after search_documents found nothing"),
+      what: z.string().min(1).describe("'page says <quoted line or missing>; now <the fact>', one sentence"),
       evidence: z.string().optional().describe("Command output, file path, or where you saw it"),
     },
   },

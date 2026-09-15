@@ -1,6 +1,6 @@
 {
   "name": "personal-ops-manual-mcp",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "private": true,
   "type": "module",
   "description": "Read-only stdio MCP server over the Personal Ops Manual folder",

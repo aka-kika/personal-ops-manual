@@ -58,20 +58,27 @@ get its id.
 
 ## Reporting a change
 
-You do not edit pages. When you change something in the setup during your
-work (a new MCP server, a moved config, a port, a launch agent, a domain), or
-you notice a page that no longer matches the machine, file a report before
-you finish:
+You do not edit pages. A report is a mismatch between a page and the machine,
+found by you, that the operator has to fix. It has three parts, in this order:
+
+1. **The page.** `search_documents` on the topic, then `get_document`. Name the
+   page you read (title or id). `none` only after the search came back empty.
+2. **What the page says.** Quote the line that is wrong, or write `missing`.
+3. **What is true now, with evidence.** One sentence, plus the command output,
+   path, or screen you saw it on.
 
 ```
-report_change(agent: "<your name>", page: "<page title or id, or none>",
-              what: "<one sentence>", evidence: "<command, path, or what you saw>")
+report_change(agent: "<your name>", page: "<title or id you read, or none>",
+              what: "page says <quote or missing>; now <the fact>",
+              evidence: "<command, path, or what you saw>")
 ```
 
-It appends one dated line to `_inbox/reports.md`. The operator reads the
-inbox at the start of every session, applies what is true to the pages, and
-ticks the line. If the same fact matters right now, also tell the owner in
-the chat. Do not report things you only guessed.
+If the page already says it, there is nothing to report. News about the
+project (a release went out, a post is live, a repo went public) is not a
+report unless a page contradicts it; the operator made those changes and wrote
+them down. It appends one dated line to `_inbox/reports.md` in the documents folder. The operator reads the inbox at the start of every session, applies
+what is true to the pages, and ticks the line. If the same fact matters right
+now, also tell the owner in the chat. Do not report things you only guessed.
 
 The manual holds only what exists today, running or parked. It is not a
 history record: a cancelled service, a removed server, a replaced tool has no
