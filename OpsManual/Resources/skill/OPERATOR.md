@@ -1,6 +1,6 @@
 ---
 name: ops-manual-operator
-version: 2.1
+version: 2.2
 description: >
   The operator skill for the Personal Ops Manual: the one agent allowed to
   create, edit, and delete pages. Use when the owner says "add it to the ops
@@ -73,7 +73,7 @@ shows the change at once; the MCP reads the same file on the next call.
   the body.
 - **`updatedAt`** becomes the current time in ISO 8601 UTC with milliseconds
   (`2026-09-14T15:04:05.000Z`) whenever the body or a field changes.
-  `createdAt` never changes.
+  `createdAt` never changes. `date` (the custom key) stays the creation date.
 - **The Verified line is the page's signature.** The last block of every page
   is a rule, then `> **Verified** YYYY-MM-DD by <how>`: the command you ran,
   the file you read, the person who told you. Update it every time you touch
@@ -82,8 +82,11 @@ shows the change at once; the MCP reads the same file on the next call.
   "as of 2026-09-14" or put the date in the Verified line if the whole page
   was checked.
 - **Unknowns are checkboxes.** Under `## To confirm`, one `- [ ]` per open
-  question for the owner. Never a guess dressed as a fact. Tick them when
-  answered and move the answer into the body.
+  question for the owner. Never a guess dressed as a fact. When the owner
+  answers, move the answer into the body and delete the checkbox line; when
+  the last one goes, delete the whole `## To confirm` section. A ticked box
+  never stays on a page, because the manual shows the present, not the
+  trail.
 - **Links.** `[[Page title]]` or `[[Page title|shown text]]`, exact title,
   case-insensitive. Every page has `## Related` after a rule, links separated
   by ` · `: an agent page links its MCP servers and skills, a service links
