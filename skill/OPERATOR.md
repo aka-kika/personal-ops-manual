@@ -1,6 +1,6 @@
 ---
 name: ops-manual-operator
-version: 2.2
+version: 2.3
 description: >
   The operator skill for the Personal Ops Manual: the one agent allowed to
   create, edit, and delete pages. Use when the owner says "add it to the ops
@@ -39,6 +39,9 @@ reasoning in `docs/PHILOSOPHY.md` of the app repo.
    true to the page (Verified line included), then tick the line
    (`- [ ]` becomes `- [x]`). A report that is wrong gets ticked too, with
    ` · not applied: <why>` appended.
+   Ticked lines do not stay: at the end of the session delete every `- [x]`
+   line, after telling the owner in your report which reports you applied and
+   which you did not and why. The file keeps its header and the open lines only.
    If `list_reports` is not in your tool list, your MCP process started
    before the inbox existed (server 2.1.0): reconnect the server (reconnect in your client, or a new session) rather than
    working around it. The file is created by the first report; until then
