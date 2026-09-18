@@ -10,10 +10,17 @@ cd "$(dirname "$0")"
 
 # Signing identity comes from the environment or a git-ignored release.env next to this script:
 #   OPS_TEAM_ID=XXXXXXXXXX   OPS_SIGNING_NAME="Your Name"   OPS_NOTARY_PROFILE=ops-manual-notary
+#   OPS_SIGNING_IDENTITY=<certificate SHA-1>   (optional, see below)
 #   OPS_TAP_DIR=/path/to/homebrew-tap   (optional: --publish also bumps the cask there)
 [[ -f release.env ]] && source release.env
 TEAM_ID="${OPS_TEAM_ID:?set OPS_TEAM_ID (Apple Team ID)}"
-IDENTITY="Developer ID Application: ${OPS_SIGNING_NAME:?set OPS_SIGNING_NAME (name on the certificate)} ($TEAM_ID)"
+# OPS_SIGNING_IDENTITY (optional, a certificate SHA-1) wins over the name: use it when
+# two certificates in the Keychain share the same name.
+if [[ -n "${OPS_SIGNING_IDENTITY:-}" ]]; then
+  IDENTITY="$OPS_SIGNING_IDENTITY"
+else
+  IDENTITY="Developer ID Application: ${OPS_SIGNING_NAME:?set OPS_SIGNING_NAME (name on the certificate)} ($TEAM_ID)"
+fi
 PROFILE="${OPS_NOTARY_PROFILE:-ops-manual-notary}"
 VERSION=$(sed -n 's/^ *MARKETING_VERSION: "\(.*\)"/\1/p' project.yml | head -1)
 OUT="build/release"
