@@ -10,6 +10,7 @@ enum CategoryIcons {
         "Domains": "globe",
         "Hooks": "link",
         "Machines": "laptopcomputer",
+        "Maestri": "apple.terminal",
         "Maintenance": "wrench",
         "Manual": "info.circle",
         "MCP (mine)": "server.rack",
