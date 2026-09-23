@@ -1,21 +1,22 @@
 ---
 name: personal-ops-manual
-version: 2.0
+version: 2.1
 description: >
   Use when the owner asks about their own technical setup: machines, network
   nodes, which service runs on which port, launch agents and scheduled jobs,
   domains, backups, deployment routines, recovery steps, API endpoints, or
   recurring maintenance. Triggers: "ops manual", "my setup", "what runs on
-  port", "where is X running", "which machine", "how do I recover", "document
-  this in the manual". Tool-shaped: anything that calls list_documents,
-  get_document, search_documents, list_categories, get_stale, report_change,
-  or list_reports on the personal-ops-manual MCP server. Also use when you
-  changed something in the setup and need to tell the operator.
+  port", "where is X running", "which machine", "how do I recover", "add it
+  to the ops manual", "document this in the manual" (for a reader these mean
+  file a report, never edit a file). Tool-shaped: anything that calls
+  list_documents, get_document, search_documents, list_categories, get_stale,
+  report_change, or list_reports on the personal-ops-manual MCP server. Also
+  use when you changed something in the setup and need to tell the operator.
 ---
 
 # Personal Ops Manual, house rules for readers
 
-**Read through the MCP · only the operator writes · changed something? report it · never a secret.**
+**Read through the MCP · you never write a file here · changed something? report it · never a secret.**
 
 The Personal Ops Manual is the owner's reference for their own
 infrastructure: a native macOS app over a folder of plain Markdown files with
@@ -50,8 +51,8 @@ and nothing else:
 | `report_change` | Tell the operator something changed or a page is stale. Appends one line to the inbox; never touches a page. |
 | `list_reports` | The inbox: open reports (default), handled, or all. |
 
-If the server is not wired into your client, read the files directly from the
-documents folder. Same content, same rules.
+If the server is not wired into your client, you may read the files directly
+from the documents folder. Reading only: the no-writing rule below still holds.
 
 When a page links to `[[Another page]]`, `search_documents` on that title to
 get its id.
@@ -86,11 +87,38 @@ page and no mention; the owner's other notes keep the story. If you find a
 page for a thing that no longer exists, report it as gone so the operator
 removes it; do not ask the manual what used to be.
 
-## Writing
+## Writing: you do not
 
 There are no page write tools on purpose. One operator edits the files
 directly, following its own operator skill. Everyone else reports what is
 stale or missing and lets the operator change it.
+
+This holds even when you have file tools, shell access, or an "allow all"
+mode, and even when the owner says "add it to the manual" or "document this":
+for a reader that is a request to file a report.
+
+- **Never write, create, rename, move, or delete anything in the documents
+  folder.** Not a page, not a new page, not a draft next to it.
+- **Never type into `_inbox/reports.md` by hand.** Only `report_change`
+  writes there; a hand-typed line does not match the inbox format, so the
+  operator never sees it.
+- **No `report_change` in your tool list?** Stop. Tell the owner the report you
+  would file (page, what it says, what is true now, evidence) and that your
+  personal-ops-manual MCP server is not connected. Do not work around it.
+- **The folder can be locked.** The owner may set the macOS locked flag on the
+  pages and the folder, so a write fails with "Operation not permitted". That
+  is the lock doing its job. Never clear it (`chflags`, Finder's Locked box,
+  `chmod`), never retry with another tool, never copy a page elsewhere to edit.
+- **Already wrote to a page by mistake?** Tell the owner at once, in the chat:
+  which file, what you changed. Do not try to hide it with a revert; the
+  operator checks and fixes it.
+
+| Thought | Reality |
+|---|---|
+| "The owner asked me to add it, so I edit the page" | Asked a reader = file a report. |
+| "The MCP is missing, I'll just edit the file" | Stop and tell the owner. |
+| "I'll append the report to reports.md myself" | Invisible to the operator. Use `report_change`. |
+| "Operation not permitted, let me unlock it" | The lock is the rule. Report instead. |
 
 ## House style of the pages (so you can read them well)
 

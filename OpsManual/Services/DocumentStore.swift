@@ -114,6 +114,7 @@ final class DocumentStore {
 
     @discardableResult
     func create(_ draft: DocDraft) throws -> OpsDocument {
+        try ensureUnlocked()
         let now = FrontmatterCodec.nowISO()
         let doc = OpsDocument(
             id: OpsDocument.makeID(),
@@ -140,6 +141,7 @@ final class DocumentStore {
     /// "old" one there would delete the file that was just written.
     @discardableResult
     func update(id: String, draft: DocDraft) throws -> OpsDocument {
+        try ensureUnlocked()
         guard let existing = document(id: id) else { throw DocumentStoreError.documentNotFound(id: id) }
         var updated = existing
         updated.title = draft.title.trimmingCharacters(in: .whitespaces).isEmpty ? "Untitled" : draft.title.trimmingCharacters(in: .whitespaces)
@@ -160,6 +162,7 @@ final class DocumentStore {
     }
 
     func trash(id: String) throws {
+        try ensureUnlocked()
         guard let doc = document(id: id) else { return }
         try FileManager.default.trashItem(at: fileURL(for: doc), resultingItemURL: nil)
         load()
@@ -214,8 +217,26 @@ final class DocumentStore {
         return a.isEqual(b)
     }
 
+    /// True when the folder carries the macOS locked flag (`scripts/ops-lock.sh`).
+    var isLocked: Bool {
+        // FileManager, not URL.resourceValues: URLs cache resource values, and a lock set
+        // while the app runs must show up at once.
+        (try? FileManager.default.attributesOfItem(atPath: folder.path)[.immutable] as? Bool) == true
+    }
+
+    private func ensureUnlocked() throws {
+        if isLocked { throw LockedError() }
+    }
+
     private func write(_ doc: OpsDocument, to url: URL) throws {
         let data = Data(FrontmatterCodec.serialize(doc).utf8)
         try data.write(to: url, options: .atomic)
+    }
+}
+
+/// Thrown when a page change is tried while the folder is locked.
+struct LockedError: LocalizedError {
+    var errorDescription: String? {
+        "The manual is locked, so pages cannot change here. The operator unlocks it with ops-lock unlock (scripts/ops-lock.sh in the app repo)."
     }
 }

@@ -1,6 +1,6 @@
 ---
 name: ops-manual-operator
-version: 2.3
+version: 2.4
 description: >
   The operator skill for the Personal Ops Manual: the one agent allowed to
   create, edit, and delete pages. Use when the owner says "add it to the ops
@@ -46,7 +46,28 @@ reasoning in `docs/PHILOSOPHY.md` of the app repo.
    before the inbox existed (server 2.1.0): reconnect the server (reconnect in your client, or a new session) rather than
    working around it. The file is created by the first report; until then
    the inbox is empty, not missing.
+   `list_reports` also returns `malformed`: checkbox lines someone typed into
+   the inbox by hand. Treat each like a report, then delete it.
 2. Then the work the owner asked for.
+
+## The lock
+
+The pages and the documents folder carry the macOS locked flag, so no app or
+agent can write them, you included, until you unlock. `_inbox/` stays open so
+readers can file reports.
+
+```bash
+scripts/ops-lock.sh status             # locked or unlocked
+scripts/ops-lock.sh unlock             # before your first edit; locks again by itself after 30 min
+scripts/ops-lock.sh lock               # when you are done, always
+```
+
+- Unlock only in a session where you are about to write, lock again before
+  your final report. Longer job: `scripts/ops-lock.sh unlock 60`.
+- New pages you created while unlocked get locked by the next `lock`.
+- A write that fails with "Operation not permitted" means you forgot to unlock.
+- If `status` shows the folder unlocked when you did not unlock it, tell the
+  owner: some other process cleared the flag.
 
 ## Before you write
 

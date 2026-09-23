@@ -184,7 +184,7 @@ function summarize(doc) {
 
 // ── Server ──────────────────────────────────────────────────────────────
 
-const server = new McpServer({ name: "personal-ops-manual", version: "2.1.2" });
+const server = new McpServer({ name: "personal-ops-manual", version: "2.2.0" });
 
 const VERIFIED_RE = /^>\s*\*\*Verified\*\*\s*(\d{4}-\d{2}-\d{2})/m;
 const UNCHECKED_RE = /^\s*[-*+]\s+\[ \]\s+(.+)$/gm;
@@ -361,12 +361,14 @@ function oneLine(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function readInbox() {
+  try { return fs.readFileSync(inboxPath(), "utf-8"); } catch (error) { if (error.code === "ENOENT") return ""; throw error; }
+}
+
 function parseReports() {
-  let raw;
-  try { raw = fs.readFileSync(inboxPath(), "utf-8"); } catch (error) { if (error.code === "ENOENT") return []; throw error; }
   const out = [];
   const re = /^- \[( |x)\] (\S+ \S+ UTC) · (.+?) · page: (.+?) · (.+?)(?: · evidence: (.*))?$/;
-  for (const line of raw.split("\n")) {
+  for (const line of readInbox().split("\n")) {
     const m = re.exec(line);
     if (!m) continue;
     out.push({ handled: m[1] === "x", reportedAt: m[2], agent: m[3], page: m[4], what: m[5], evidence: m[6] ?? "", line });
@@ -374,12 +376,19 @@ function parseReports() {
   return out;
 }
 
+// Checkbox lines that report_change did not write (typed by hand): they do not
+// parse, so without this they would be invisible to the operator.
+function malformedReports() {
+  const re = /^- \[( |x)\] (\S+ \S+ UTC) · (.+?) · page: (.+?) · (.+?)(?: · evidence: (.*))?$/;
+  return readInbox().split("\n").filter((line) => /^- \[[ xX]\]/.test(line) && !re.test(line));
+}
+
 server.registerTool(
   "report_change",
   {
     title: "Report a change to the operator",
     description:
-      "For readers. Report a mismatch between a page and the machine so the operator can fix the page. Read the page first (search_documents, then get_document). Appends one dated line to _inbox/reports.md in the documents folder; it never edits a page. If the page already says it, do not report; news about the project is not a report unless a page contradicts it.",
+      "For readers. Report a mismatch between a page and the machine so the operator can fix the page. Read the page first (search_documents, then get_document). Appends one dated line to _inbox/reports.md in the documents folder; it never edits a page. This is the only way to report: never edit pages or type into the inbox file yourself. If the page already says it, do not report; news about the project is not a report unless a page contradicts it.",
     inputSchema: {
       agent: z.string().min(1).describe("Your name, e.g. goose, cursor, aka"),
       page: z.string().min(1).describe("Title or id of the page you read; 'none' only after search_documents found nothing"),
@@ -404,7 +413,7 @@ server.registerTool(
   {
     title: "List reports in the inbox",
     description:
-      "For the operator (and anyone curious): the reports readers filed with report_change. status `open` (default) returns unticked lines, `handled` the ticked ones, `all` both. The operator applies open reports to the pages and ticks them in _inbox/reports.md.",
+      "For the operator (and anyone curious): the reports readers filed with report_change. status `open` (default) returns unticked lines, `handled` the ticked ones, `all` both. The operator applies open reports to the pages and ticks them in _inbox/reports.md. Hand-typed lines that do not parse come back under `malformed`.",
     inputSchema: {
       status: z.enum(["open", "handled", "all"]).optional().describe("open (default), handled, or all"),
       limit: z.number().int().min(1).max(500).optional().describe("Max reports (default 50)"),
@@ -415,7 +424,13 @@ server.registerTool(
     const all = parseReports();
     const picked = all.filter((r) => wanted === "all" || (wanted === "handled") === r.handled);
     const page = picked.slice(-(limit ?? 50)).reverse();
-    return text({ status: wanted, count: page.length, total: picked.length, file: inboxPath(), reports: page });
+    const malformed = malformedReports();
+    const result = { status: wanted, count: page.length, total: picked.length, file: inboxPath(), reports: page };
+    if (malformed.length) {
+      result.malformed = malformed;
+      result.note = "These lines were typed into the inbox by hand, not filed with report_change. Check each one like a report, then delete it.";
+    }
+    return text(result);
   },
 );
 

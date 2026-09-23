@@ -9,7 +9,7 @@
 <img alt="Notarized" src="https://img.shields.io/badge/Developer%20ID-notarized-2DA44E">
 <img alt="MCP server" src="https://img.shields.io/badge/MCP-7%20tools-6E56CF">
 <img alt="Markdown files" src="https://img.shields.io/badge/data-Markdown%20%2B%20YAML-555555">
-<img alt="Version" src="https://img.shields.io/badge/release-2.1.1-blue">
+<img alt="Version" src="https://img.shields.io/badge/release-2.2.0-blue">
 <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-green">
 </p>
 
@@ -60,6 +60,25 @@ the website and the code are, the latest version, and how to install it. One
 place to look instead of five browser tabs.
 
 ![The Releases category: one page per public tool, with website, source, latest release, the install line and the notarization note](docs/screenshots/05-releases-sift.png)
+
+## Only the operator writes, and the folder can enforce it
+
+Readers get no page write tools, but an agent with plain file access could
+still edit a page. `scripts/ops-lock.sh` closes that gap with the macOS locked
+flag (the Locked box in Finder's Get Info) on every page and on the folder
+itself. Every app and agent on the Mac then gets "Operation not permitted" on
+a write, whatever tool it uses. `_inbox/` stays open, so `report_change` keeps
+working.
+
+```bash
+scripts/ops-lock.sh status          # locked or unlocked
+scripts/ops-lock.sh unlock          # for the operator; locks again after 30 min
+scripts/ops-lock.sh lock            # lock now
+```
+
+While the folder is locked the app is a reader too: New, Edit and Move to
+Trash explain that the manual is locked. `list_reports` also returns lines
+someone typed into the inbox by hand under `malformed`, so none go unseen.
 
 ## Install
 

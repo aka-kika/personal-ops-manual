@@ -11,6 +11,7 @@ final class DocumentStoreTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        try? FileManager.default.setAttributes([.immutable: false], ofItemAtPath: dir.path)
         try? FileManager.default.removeItem(at: dir)
     }
 
@@ -42,6 +43,21 @@ final class DocumentStoreTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent("new-page-\(doc.id).md").path))
         XCTAssertEqual(store.documents.count, 1)
         XCTAssertEqual(store.excerpt(for: doc), "Hello")
+    }
+
+    func testLockedFolderRefusesChangesWithAClearError() throws {
+        try write("a-1.md", page("A", id: "1", body: "a"))
+        let store = DocumentStore(folder: dir, watch: false)
+        XCTAssertFalse(store.isLocked)
+        try FileManager.default.setAttributes([.immutable: true], ofItemAtPath: dir.path)
+        XCTAssertTrue(store.isLocked)
+        var draft = DocDraft()
+        draft.title = "Blocked"
+        draft.category = "Ops"
+        XCTAssertThrowsError(try store.create(draft)) { XCTAssertTrue($0 is LockedError) }
+        XCTAssertThrowsError(try store.update(id: "1", draft: DocDraft(document: store.document(id: "1")!))) { XCTAssertTrue($0 is LockedError) }
+        XCTAssertThrowsError(try store.trash(id: "1")) { XCTAssertTrue($0 is LockedError) }
+        XCTAssertEqual(store.documents.count, 1)
     }
 
     func testUpdateRenamesFileWhenTitleChanges() throws {
