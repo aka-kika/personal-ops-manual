@@ -16,7 +16,7 @@ belong to their owners; the glyphs identify pages and imply no endorsement.
 | goose | goose project favicon (2026-09-09) |
 | minimax | agent.minimax.io favicon (2026-09-12) |
 | hermes | hermes-agent.nousresearch.com icon |
-| hermes-pink | the hermes glyph recoloured pastel pink (2026-09-26), for a second Hermes agent (Karite) |
+| hermes-pink | the hermes glyph recoloured pastel pink (2026-09-26), for a second Hermes agent (Kartie) |
 | cursor | thesvg.org, cursor/dark.svg and light.svg (themed pair) |
 | kimi | thesvg.org, kimi/color.svg and a light variant (themed pair) |
 | gemini, deepseek, qwen, mistral, perplexity, copilot | @lobehub/icons-static-svg (MIT), colour variants, 2026-09-14 |
