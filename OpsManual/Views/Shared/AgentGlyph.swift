@@ -5,7 +5,7 @@ struct AgentGlyph: View {
     let name: String
     var size: CGFloat = 16
 
-    static let known: Set<String> = ["aka", "claude", "claude-code", "goose", "grok", "hermes", "meta", "minimax", "gpt", "cursor", "kimi", "gemini", "deepseek", "qwen", "mistral", "perplexity", "copilot", "ollama", "openai", "windsurf", "codex", "opencode"]
+    static let known: Set<String> = ["aka", "claude", "claude-code", "goose", "grok", "hermes", "hermes-pink", "meta", "minimax", "gpt", "cursor", "kimi", "gemini", "deepseek", "qwen", "mistral", "perplexity", "copilot", "ollama", "openai", "windsurf", "codex", "opencode"]
 
     var body: some View {
         if Self.known.contains(name) {

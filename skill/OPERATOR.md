@@ -223,7 +223,7 @@ more attributes as tables. No emojis. At most one `> [!warning]` or
   Servers the owner built go in MCP (mine), everyone else's in MCP
   (third-party).
 - Agent pages carry `icon: <name>` for the glyph: aka, claude, claude-code,
-  goose, grok, hermes, meta, minimax, gpt, cursor, kimi, gemini, deepseek,
+  goose, grok, hermes, hermes-pink, meta, minimax, gpt, cursor, kimi, gemini, deepseek,
   qwen, mistral, perplexity, copilot, ollama, openai, windsurf, codex,
   opencode (`docs/AGENT-ICONS.md` in the repo lists the sources).
 
