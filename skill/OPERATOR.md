@@ -88,6 +88,7 @@ scripts/ops-lock.sh lock               # when you are done, always
 Edit the file directly with your file tools. The app watches the folder and
 shows the change at once; the MCP reads the same file on the next call.
 
+- **Only what is.** No absences ("X is not on the agent's server list", "not in that app", "no agent uses it"), no history ("removed", "renamed from", "no longer", "was"), no decision stories ("on purpose", "the owner's call", "(name, date)"). Write the present fact only; the why and the story go to the owner's own history notes. Exceptions: the Verified line, `## To confirm` boxes, and warnings that prevent a real mistake today.
 - **Frontmatter stays exactly as the app writes it.** Fixed key order:
   `title`, `category`, `summary` (omit when empty), `tags` (a YAML list, or
   `  []`), `createdAt`, `updatedAt`, `id`, then the custom keys in their stored
