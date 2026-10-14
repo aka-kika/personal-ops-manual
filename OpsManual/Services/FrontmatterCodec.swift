@@ -90,11 +90,14 @@ enum FrontmatterCodec {
             .replacingOccurrences(of: "\n", with: " ")
     }
 
-    static func document(from raw: String) -> OpsDocument? {
+    /// `fileDate` stands in for a missing createdAt or updatedAt: "now" would pin a
+    /// hand-made page to the top of Recent and hide it from the stale queue.
+    static func document(from raw: String, fileDate: Date? = nil) -> OpsDocument? {
         let p = parse(raw)
         guard let rawID = p.value("id") else { return nil }
         let id = singleLine(rawID).trimmingCharacters(in: .whitespaces)
         guard isValidID(id) else { return nil }
+        let fallbackDate = isoFormatter.string(from: fileDate ?? Date(timeIntervalSince1970: 0))
         let props = p.fields.filter { !OpsDocument.knownKeys.contains($0.key) }
             .map { DocProperty(key: $0.key, value: $0.value) }
         return OpsDocument(
@@ -103,8 +106,8 @@ enum FrontmatterCodec {
             category: p.value("category").flatMap { $0.isEmpty ? nil : $0 } ?? "Uncategorized",
             summary: p.value("summary") ?? "",
             tags: p.tags,
-            createdAt: p.value("createdAt") ?? nowISO(),
-            updatedAt: p.value("updatedAt") ?? nowISO(),
+            createdAt: p.value("createdAt") ?? fallbackDate,
+            updatedAt: p.value("updatedAt") ?? fallbackDate,
             properties: props,
             body: p.body)
     }

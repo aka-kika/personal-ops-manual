@@ -83,6 +83,26 @@ final class DocumentStoreTests: XCTestCase {
         XCTAssertEqual(store.search("   "), [])
     }
 
+    func testSearchMatchesSummary() throws {
+        try write("a-1.md", "---\ntitle: Alpha\ncategory: Ops\nsummary: Restart the gateway\ntags:\n  []\ncreatedAt: 2026-09-13T10:00:00.000Z\nupdatedAt: 2026-09-13T10:00:00.000Z\nid: 1\n---\n\nbody\n")
+        let store = DocumentStore(folder: dir, watch: false)
+        let hits = store.search("gateway")
+        XCTAssertEqual(hits.map(\.title), ["Alpha"])
+        XCTAssertEqual(hits.first?.snippet, "Restart the gateway")
+    }
+
+    func testMissingDatesFallBackToTheFileDate() throws {
+        try write("a-1.md", "---\ntitle: Hand made\ncategory: Ops\nid: 1\n---\n\nbody\n")
+        try write("b-2.md", page("Dated", id: "2", body: "b", updated: "2025-01-01T00:00:00.000Z"))
+        let old = Date(timeIntervalSince1970: 1_600_000_000)
+        try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: dir.appendingPathComponent("a-1.md").path)
+        let store = DocumentStore(folder: dir, watch: false)
+        let doc = try XCTUnwrap(store.document(id: "1"))
+        XCTAssertEqual(doc.updatedAt, FrontmatterCodec.isoFormatter.string(from: old))
+        XCTAssertEqual(doc.createdAt, doc.updatedAt)
+        XCTAssertEqual(store.documents.map(\.id), ["2", "1"])
+    }
+
     func testBacklinksAndTitleLookup() throws {
         try write("t-1.md", page("Target Page", id: "1", body: "x"))
         try write("s-2.md", page("Source", id: "2", body: "see [[target page|it]]"))

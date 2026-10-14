@@ -45,66 +45,71 @@ if (process.argv.includes("--print-docs-dir")) {
 
 const KNOWN_KEYS = new Set(["title", "category", "tags", "createdAt", "updatedAt", "id", "summary"]);
 
-function parseFrontmatter(raw) {
-  const match = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  if (!match) return { meta: {}, body: raw };
-  const meta = {};
-  const lines = match[1].split("\n");
-  let collectingTags = false;
-  const tagList = [];
+function unquote(val) {
+  if (val.length >= 2 && val.startsWith('"') && val.endsWith('"')) {
+    return val.slice(1, -1).replace(/\\"/g, '"');
+  }
+  return val;
+}
 
-  for (const line of lines) {
-    const listMatch = line.match(/^\s+-\s+(.+)/);
+// Same rules as FrontmatterCodec.parse in the app: CRLF read as LF, the first
+// value of a repeated key wins, list tags stay whole (a comma inside one is
+// kept), inline tags are unquoted.
+function parseFrontmatter(raw) {
+  const text = raw.replace(/\r\n/g, "\n");
+  const match = text.match(/^---\n([\s\S]*?)\n---(?:\n([\s\S]*))?$/);
+  if (!match) return { meta: {}, fields: [], tags: [], body: text };
+  const fields = [];
+  let tags = [];
+  let collectingTags = false;
+
+  for (const line of match[1].split("\n")) {
+    const listMatch = line.match(/^[ \t]+- (.*)$/);
     if (listMatch && collectingTags) {
-      let val = listMatch[1].trim();
-      if (val.startsWith('"') && val.endsWith('"')) {
-        val = val.slice(1, -1).replace(/\\"/g, '"');
-      }
-      tagList.push(val);
+      tags.push(unquote(listMatch[1].trim()));
       continue;
     }
     collectingTags = false;
     const idx = line.indexOf(":");
     if (idx === -1) continue;
     const key = line.slice(0, idx).trim();
-    let val = line.slice(idx + 1).trim();
+    const val = line.slice(idx + 1).trim();
     if (key === "tags") {
       if (val === "" || val === "[]") {
         collectingTags = true;
         continue;
       }
-      meta[key] = val;
+      const inner = val.replace(/^\[/, "").replace(/\]$/, "");
+      tags = inner.split(",").map((t) => unquote(t.trim())).filter(Boolean);
       continue;
     }
-    if (val.startsWith('"') && val.endsWith('"')) {
-      val = val.slice(1, -1).replace(/\\"/g, '"');
+    fields.push({ key, value: unquote(val) });
+  }
+
+  const meta = {};
+  for (const { key, value } of fields) if (!(key in meta)) meta[key] = value;
+  return { meta, fields, tags, body: (match[2] ?? "").trimStart() };
+}
+
+function extractProperties(fields) {
+  return fields.filter(({ key }) => !KNOWN_KEYS.has(key)).map(({ key, value }) => ({ key, value }));
+}
+
+// Fenced code blocks hold examples (page templates), not the page's own
+// Verified line or open checkboxes.
+function withoutFences(body) {
+  const out = [];
+  let fence = null;
+  for (const line of body.split("\n")) {
+    const m = line.match(/^\s{0,3}(`{3,}|~{3,})/);
+    if (fence) {
+      if (m && m[1][0] === fence[0] && m[1].length >= fence.length) fence = null;
+      continue;
     }
-    meta[key] = val;
+    if (m) { fence = m[1]; continue; }
+    out.push(line);
   }
-
-  if (tagList.length > 0 && !meta["tags"]) {
-    meta["tags"] = `[${tagList.join(", ")}]`;
-  } else if (tagList.length === 0 && collectingTags) {
-    meta["tags"] = "[]";
-  }
-  return { meta, body: match[2].trimStart() };
-}
-
-function extractProperties(meta) {
-  const props = [];
-  for (const [key, val] of Object.entries(meta)) {
-    if (!KNOWN_KEYS.has(key)) props.push({ key, value: val });
-  }
-  return props;
-}
-
-function parseTags(raw) {
-  if (!raw || raw === "[]") return [];
-  const inner = raw.replace(/^\[/, "").replace(/\]$/, "");
-  return inner
-    .split(",")
-    .map((t) => t.trim())
-    .filter(Boolean);
+  return out.join("\n");
 }
 
 function stripMarkdown(text) {
@@ -143,18 +148,22 @@ function readAllFiles() {
   const docs = [];
   for (const file of mdFiles) {
     try {
-      const raw = fs.readFileSync(path.join(dir, file), "utf-8");
-      const { meta, body } = parseFrontmatter(raw);
+      const filePath = path.join(dir, file);
+      const raw = fs.readFileSync(filePath, "utf-8");
+      const { meta, fields, tags, body } = parseFrontmatter(raw);
       if (!meta.id) continue;
+      // A missing date falls back to the file's own date, never to "now":
+      // "now" would hide the page from get_stale and pin it to the top.
+      const fileDate = () => fs.statSync(filePath).mtime.toISOString();
       docs.push({
         id: meta.id,
         title: meta.title || "Untitled",
         category: meta.category || "Uncategorized",
-        tags: parseTags(meta.tags),
-        createdAt: meta.createdAt || new Date().toISOString(),
-        updatedAt: meta.updatedAt || new Date().toISOString(),
+        tags,
+        createdAt: meta.createdAt || fileDate(),
+        updatedAt: meta.updatedAt || fileDate(),
         summary: meta.summary || "",
-        properties: extractProperties(meta),
+        properties: extractProperties(fields),
         body,
       });
     } catch {
@@ -190,13 +199,13 @@ const VERIFIED_RE = /^>\s*\*\*Verified\*\*\s*(\d{4}-\d{2}-\d{2})/m;
 const UNCHECKED_RE = /^\s*[-*+]\s+\[ \]\s+(.+)$/gm;
 
 function verifiedDate(doc) {
-  const m = VERIFIED_RE.exec(doc.body);
+  const m = VERIFIED_RE.exec(withoutFences(doc.body));
   return m ? m[1] : null;
 }
 
 function uncheckedItems(doc) {
   const items = [];
-  for (const m of doc.body.matchAll(UNCHECKED_RE)) items.push(m[1].trim());
+  for (const m of withoutFences(doc.body).matchAll(UNCHECKED_RE)) items.push(m[1].trim());
   return items;
 }
 
@@ -263,7 +272,8 @@ server.registerTool(
       let matchedIn = null;
       if (doc.title.toLowerCase().includes(q)) { rank = 0; matchedIn = "title"; }
       else if (doc.tags.some((t) => t.toLowerCase().includes(q))) { rank = 1; matchedIn = "tags"; }
-      else if (doc.summary.toLowerCase().includes(q) || doc.category.toLowerCase().includes(q)) { rank = 2; matchedIn = "summary"; }
+      else if (doc.summary.toLowerCase().includes(q)) { rank = 2; matchedIn = "summary"; }
+      else if (doc.category.toLowerCase().includes(q)) { rank = 2; matchedIn = "category"; }
       else if (doc.body.toLowerCase().includes(q)) { rank = 3; matchedIn = "body"; }
       if (rank === null) continue;
       const bodyIdx = doc.body.toLowerCase().indexOf(q);
@@ -398,12 +408,20 @@ server.registerTool(
   },
   async ({ agent, page, what, evidence }) => {
     const file = inboxPath();
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    if (!fs.existsSync(file)) fs.writeFileSync(file, INBOX_HEADER, "utf-8");
     const stamp = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
     let line = `- [ ] ${stamp} · ${oneLine(agent)} · page: ${oneLine(page)} · ${oneLine(what)}`;
     if (evidence && oneLine(evidence)) line += ` · evidence: ${oneLine(evidence)}`;
-    fs.appendFileSync(file, line + "\n", "utf-8");
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      if (!fs.existsSync(file)) fs.writeFileSync(file, INBOX_HEADER, "utf-8");
+      fs.appendFileSync(file, line + "\n", "utf-8");
+    } catch (error) {
+      if (error.code !== "EPERM" && error.code !== "EACCES") throw error;
+      return text({
+        ok: false,
+        error: `The ${INBOX_DIR}/ folder is missing or locked, so the report was not filed. Tell Kika the inbox needs the operator: ops-lock lock (re)opens it. Your report was: ${line}`,
+      });
+    }
     return text({ ok: true, file, line, open: parseReports().filter((r) => !r.handled).length });
   },
 );

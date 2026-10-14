@@ -6,6 +6,7 @@ enum CategoryIcons {
         "APIs": "powerplug",
         "Automations": "bolt",
         "Backups": "clock.arrow.circlepath",
+        "CLI tools": "terminal",
         "Deployments": "paperplane",
         "Domains": "globe",
         "Hooks": "link",

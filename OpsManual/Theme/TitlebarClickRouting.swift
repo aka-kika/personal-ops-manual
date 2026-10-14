@@ -69,6 +69,44 @@ extension View {
     }
 }
 
+// MARK: - Modal overlay guard
+
+/// Hands `dismiss` to the window's title-bar router while it is non-nil, so a
+/// click on the header strip closes the overlay instead of reaching a button.
+struct TitlebarOverlayGuard: NSViewRepresentable {
+    var dismiss: (() -> Void)?
+
+    func makeNSView(context: Context) -> TitlebarOverlayGuardView {
+        let view = TitlebarOverlayGuardView()
+        view.dismiss = dismiss
+        return view
+    }
+
+    func updateNSView(_ nsView: TitlebarOverlayGuardView, context: Context) {
+        nsView.dismiss = dismiss
+    }
+}
+
+final class TitlebarOverlayGuardView: NSView {
+    var dismiss: (() -> Void)? {
+        didSet { apply() }
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        apply()
+    }
+
+    private func apply() {
+        guard let window else { return }
+        for controller in window.titlebarAccessoryViewControllers {
+            (controller.view as? TitlebarClickRouterView)?.overlayDismiss = dismiss
+        }
+    }
+}
+
 // MARK: - Router accessory
 
 enum OpsWindowChrome {
@@ -245,13 +283,25 @@ private extension NSView {
 }
 
 final class TitlebarClickRouterView: NSView {
+    /// Set while a modal overlay (the search palette) covers the window: the strip
+    /// then takes every click itself and closes the overlay, like the backdrop
+    /// below it, so the header buttons under the overlay cannot fire.
+    var overlayDismiss: (() -> Void)?
     private var holes: [TitlebarClickHoleView] = []
     private var blockingViews: [NSView] = []
     private static let blockingViewClass: NSView.Type? =
         NSClassFromString("NSTitlebarContainerBlockingView") as? NSView.Type
     nonisolated(unsafe) private var syncTimer: Timer?
 
-    override var mouseDownCanMoveWindow: Bool { true }
+    override var mouseDownCanMoveWindow: Bool { overlayDismiss == nil }
+
+    override func mouseDown(with event: NSEvent) {
+        if overlayDismiss == nil { super.mouseDown(with: event) }
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if let overlayDismiss { overlayDismiss() } else { super.mouseUp(with: event) }
+    }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -308,6 +358,7 @@ final class TitlebarClickRouterView: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard let superview, window != nil else { return nil }
+        if overlayDismiss != nil { return frame.contains(point) ? self : nil }
         syncHoles(syncBlockingViews: false)
         let windowPoint = superview.convert(point, to: nil)
         let localPoint = convert(windowPoint, from: nil)

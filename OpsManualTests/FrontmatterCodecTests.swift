@@ -88,6 +88,17 @@ final class FrontmatterCodecTests: XCTestCase {
         XCTAssertEqual(doc.fileName, "a-launch-agent-is-down-mtzs3wy5-r3584k.md")
     }
 
+    func testMissingDatesAreNeverNow() throws {
+        let doc = try XCTUnwrap(FrontmatterCodec.document(from: "---\ntitle: T\nid: x\n---\nbody"))
+        XCTAssertEqual(doc.updatedAt, "1970-01-01T00:00:00.000Z")
+        XCTAssertEqual(doc.createdAt, "1970-01-01T00:00:00.000Z")
+    }
+
+    func testCLIToolsCategoryHasATerminalIcon() {
+        XCTAssertEqual(CategoryIcons.symbol(for: "CLI tools"), "terminal")
+        XCTAssertEqual(CategoryIcons.symbol(for: "Unknown"), "folder")
+    }
+
     func testMakeIDShape() {
         let id = OpsDocument.makeID()
         let parts = id.split(separator: "-")

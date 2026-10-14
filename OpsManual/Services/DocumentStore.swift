@@ -92,8 +92,9 @@ final class DocumentStore {
             var docs: [OpsDocument] = []
             for name in names where name.hasSuffix(".md") {
                 let url = folder.appendingPathComponent(name)
+                let fileDate = (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate]) as? Date
                 guard let raw = try? String(contentsOf: url, encoding: .utf8),
-                      var doc = FrontmatterCodec.document(from: raw) else { continue }
+                      var doc = FrontmatterCodec.document(from: raw, fileDate: fileDate) else { continue }
                 doc.filePath = url.path
                 docs.append(doc)
             }
@@ -247,13 +248,13 @@ final class DocumentStore {
         }
     }
 
-    /// Case-insensitive substring over title, category, tags and body; snippet around the first body hit; sorted by title.
+    /// Case-insensitive substring over title, category, tags, summary and body; snippet around the first body hit; sorted by title.
     func search(_ query: String) -> [SearchHit] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !q.isEmpty else { return [] }
         var hits: [SearchHit] = []
         for doc in documents {
-            let haystack = "\(doc.title)\n\(doc.category)\n\(doc.tags.joined(separator: " "))\n\(doc.body)".lowercased()
+            let haystack = "\(doc.title)\n\(doc.category)\n\(doc.tags.joined(separator: " "))\n\(doc.summary)\n\(doc.body)".lowercased()
             guard haystack.contains(q) else { continue }
             let body = doc.body
             var snippet: String
@@ -264,6 +265,8 @@ final class DocumentStore {
                 let s = body.index(body.startIndex, offsetBy: startOffset)
                 let e = body.index(body.startIndex, offsetBy: endOffset)
                 snippet = (startOffset > 0 ? "…" : "") + body[s..<e].trimmingCharacters(in: .whitespacesAndNewlines) + (endOffset < body.count ? "…" : "")
+            } else if !doc.summary.isEmpty {
+                snippet = doc.summary
             } else {
                 snippet = String(body.prefix(100)).trimmingCharacters(in: .whitespacesAndNewlines)
             }

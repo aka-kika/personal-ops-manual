@@ -23,6 +23,7 @@ struct ContentView: View {
         .navigationSplitViewStyle(.balanced)
         .background(OpsTheme.canvas)
         .background(MainWindowChromeConfigurator())
+        .background(TitlebarOverlayGuard(dismiss: state.isSearchPresented ? { state.isSearchPresented = false } : nil))
         .frame(minWidth: 900, minHeight: 560)
         .sheet(item: $state.editorTarget) { target in
             DocumentEditorSheet(target: target, store: store) { createdID in

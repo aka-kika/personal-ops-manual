@@ -45,9 +45,20 @@ cancel_relock() {
 
 is_locked() { [[ "$(stat -f %Sf "$DIR")" == *uchg* ]]; }
 
+# _inbox must exist and stay writable, or report_change cannot file anything:
+# a locked folder refuses a new subfolder. Creating it needs the folder unlocked.
+open_inbox() {
+  if [[ ! -d "$DIR/_inbox" ]]; then
+    chflags nouchg "$DIR"
+    mkdir -p "$DIR/_inbox"
+  fi
+  chflags -R nouchg "$DIR/_inbox"
+}
+
 case "${1:-status}" in
   lock)
     cancel_relock
+    open_inbox
     targets | while IFS= read -r f; do chflags uchg "$f"; done
     chflags uchg "$DIR"
     print "ops-lock: locked $DIR"
@@ -57,6 +68,7 @@ case "${1:-status}" in
     [[ "$minutes" == <-> && "$minutes" -gt 0 ]] || { print -u2 "ops-lock: minutes must be a positive number"; exit 1; }
     cancel_relock
     chflags nouchg "$DIR"
+    open_inbox
     targets | while IFS= read -r f; do chflags nouchg "$f"; done
     mkdir -p "$STATE"
     nohup zsh -c "sleep $((minutes * 60)); rm -f '$PIDFILE'; '$SELF' lock" >/dev/null 2>&1 &

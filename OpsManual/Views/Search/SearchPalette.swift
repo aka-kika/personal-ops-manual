@@ -25,7 +25,7 @@ struct SearchPalette: View {
             .padding(14)
             Divider()
             if query.trimmingCharacters(in: .whitespaces).isEmpty {
-                EmptyState(text: "Type to search titles, tags and text").frame(height: 120)
+                EmptyState(text: "Type to search titles, tags, summaries and text").frame(height: 120)
             } else if hits.isEmpty {
                 EmptyState(text: "No matches").frame(height: 120)
             } else {
