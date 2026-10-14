@@ -182,5 +182,43 @@ final class DocumentStoreTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(50))
         }
         XCTAssertEqual(store.documents.map(\.id), ["9"])
+
+        let handle = try FileHandle(forWritingTo: dir.appendingPathComponent("n-9.md"))
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data("\nappended line\n".utf8))
+        try handle.close()
+        for _ in 0..<40 where !(store.document(id: "9")?.body.contains("appended line") ?? false) {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertTrue(store.document(id: "9")?.body.contains("appended line") == true)
+    }
+
+    func testDuplicateIDFilesStayIndependentOnUpdateAndTrash() throws {
+        try write("first.md", page("First", id: "dup", body: "one", updated: "2026-09-13T12:00:00.000Z"))
+        try write("second.md", page("Second", id: "dup", body: "two", updated: "2026-09-13T10:00:00.000Z"))
+        let store = DocumentStore(folder: dir, watch: false)
+        XCTAssertEqual(store.documents.count, 2)
+
+        let secondPath = dir.appendingPathComponent("second.md").path
+        var draft = DocDraft(document: try XCTUnwrap(store.document(filePath: secondPath)))
+        draft.body = "two updated"
+        try store.update(filePath: secondPath, draft: draft)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent("first.md").path))
+        XCTAssertTrue(try String(contentsOf: dir.appendingPathComponent("first.md"), encoding: .utf8).contains("one"))
+
+        try store.trash(filePath: dir.appendingPathComponent("first.md").path)
+        XCTAssertEqual(store.documents.count, 1)
+        XCTAssertEqual(store.documents.first?.body, "two updated")
+    }
+
+    func testInvalidPropertyKeysAreRefused() throws {
+        let store = DocumentStore(folder: dir, watch: false)
+        var draft = DocDraft()
+        draft.title = "Page"
+        draft.category = "Ops"
+        draft.properties = [DocProperty(key: "id", value: "override")]
+        XCTAssertThrowsError(try store.create(draft))
+        draft.properties = [DocProperty(key: "bad:key", value: "v")]
+        XCTAssertThrowsError(try store.create(draft))
     }
 }

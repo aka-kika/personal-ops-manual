@@ -84,10 +84,15 @@ struct DocumentEditorSheet: View {
         switch target {
         case .new(let category):
             draft = DocDraft()
-            draft.category = category
-            newCategoryMode = !category.isEmpty && !store.categories.contains { $0.name == category }
-        case .edit(let id):
-            guard let doc = store.document(id: id) else { return }
+            if category == "__new__" {
+                draft.category = ""
+                newCategoryMode = true
+            } else {
+                draft.category = category
+                newCategoryMode = !category.isEmpty && !store.categories.contains { $0.name == category }
+            }
+        case .edit(let id, let filePath):
+            guard let doc = filePath.flatMap({ store.document(filePath: $0) }) ?? store.document(id: id) else { return }
             draft = DocDraft(document: doc)
             newCategoryMode = !store.categories.contains { $0.name == doc.category }
         }
@@ -115,14 +120,26 @@ struct DocumentEditorSheet: View {
 
     private func save() {
         draft.tags = tagsText.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        draft.properties = draft.properties.filter { !$0.key.trimmingCharacters(in: .whitespaces).isEmpty }
+        let nonEmptyProps = draft.properties.filter { !$0.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        for prop in nonEmptyProps {
+            let trimmedKey = prop.key.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !FrontmatterCodec.isValidPropertyKey(trimmedKey) {
+                errorText = DocumentStoreError.invalidPropertyKey(key: trimmedKey).errorDescription
+                return
+            }
+        }
+        draft.properties = nonEmptyProps
         do {
             switch target {
             case .new:
                 let doc = try store.create(draft)
                 onDone(doc.id)
-            case .edit(let id):
-                _ = try store.update(id: id, draft: draft)
+            case .edit(let id, let filePath):
+                if let filePath, !filePath.isEmpty {
+                    _ = try store.update(filePath: filePath, draft: draft)
+                } else {
+                    _ = try store.update(id: id, draft: draft)
+                }
                 onDone(nil)
             }
         } catch {

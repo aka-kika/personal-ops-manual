@@ -16,11 +16,17 @@ struct BacklinkRef: Identifiable, Hashable {
 
 enum DocumentStoreError: LocalizedError {
     case documentNotFound(id: String)
+    case invalidDocumentID(id: String)
+    case invalidPropertyKey(key: String)
 
     var errorDescription: String? {
         switch self {
         case .documentNotFound(let id):
             "No document with id \(id) is in the folder any more. It may have been renamed, moved or removed outside the app."
+        case .invalidDocumentID(let id):
+            "Document id \"\(id)\" is not allowed."
+        case .invalidPropertyKey(let key):
+            "Property key \"\(key)\" is reserved or invalid."
         }
     }
 }
@@ -38,8 +44,6 @@ final class DocumentStore {
     @ObservationIgnored private var inboxWatcher: FolderWatcher?
     @ObservationIgnored private var watcher: FolderWatcher?
     @ObservationIgnored private let shouldWatch: Bool
-    /// id -> file name actually on disk (hand-named files may not match the slug rule).
-    @ObservationIgnored private var fileNames: [String: String] = [:]
 
     init(folder: URL, watch: Bool = true) {
         self.folder = folder
@@ -57,8 +61,16 @@ final class DocumentStore {
 
     func document(id: String) -> OpsDocument? { documents.first { $0.id == id } }
 
+    func document(filePath: String) -> OpsDocument? { documents.first { $0.filePath == filePath } }
+
     func fileURL(for doc: OpsDocument) -> URL {
-        folder.appendingPathComponent(fileNames[doc.id] ?? doc.fileName)
+        if !doc.filePath.isEmpty {
+            return URL(fileURLWithPath: doc.filePath)
+        }
+        if let existing = document(id: doc.id), !existing.filePath.isEmpty {
+            return URL(fileURLWithPath: existing.filePath)
+        }
+        return folder.appendingPathComponent(doc.fileName)
     }
 
     func excerpt(for doc: OpsDocument) -> String {
@@ -76,19 +88,27 @@ final class DocumentStore {
     func load() {
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            let names = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+            let names = try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted()
             var docs: [OpsDocument] = []
-            var names0: [String: String] = [:]
             for name in names where name.hasSuffix(".md") {
-                guard let raw = try? String(contentsOf: folder.appendingPathComponent(name), encoding: .utf8),
-                      let doc = FrontmatterCodec.document(from: raw) else { continue }
+                let url = folder.appendingPathComponent(name)
+                guard let raw = try? String(contentsOf: url, encoding: .utf8),
+                      var doc = FrontmatterCodec.document(from: raw) else { continue }
+                doc.filePath = url.path
                 docs.append(doc)
-                names0[doc.id] = name
             }
-            fileNames = names0
-            documents = docs.sorted { $0.updatedDate > $1.updatedDate }
+            documents = docs.sorted {
+                if $0.updatedDate != $1.updatedDate { return $0.updatedDate > $1.updatedDate }
+                return $0.filePath < $1.filePath
+            }
             loadError = nil
             inboxOpenCount = countOpenReports()
+            if shouldWatch, inboxWatcher?.isActive != true {
+                let inboxDir = folder.appendingPathComponent(Self.inboxFolderName)
+                if FileManager.default.fileExists(atPath: inboxDir.path) {
+                    inboxWatcher = FolderWatcher(url: inboxDir) { [weak self] in self?.load() }
+                }
+            }
         } catch {
             documents = []
             loadError = error.localizedDescription
@@ -115,18 +135,27 @@ final class DocumentStore {
     @discardableResult
     func create(_ draft: DocDraft) throws -> OpsDocument {
         try ensureUnlocked()
+        try validateProperties(draft.properties)
         let now = FrontmatterCodec.nowISO()
-        let doc = OpsDocument(
+        let title = FrontmatterCodec.singleLine(draft.title).trimmingCharacters(in: .whitespaces)
+        let category = FrontmatterCodec.singleLine(draft.category).trimmingCharacters(in: .whitespaces)
+        var doc = OpsDocument(
             id: OpsDocument.makeID(),
-            title: draft.title.trimmingCharacters(in: .whitespaces).isEmpty ? "Untitled" : draft.title.trimmingCharacters(in: .whitespaces),
-            category: draft.category.trimmingCharacters(in: .whitespaces).isEmpty ? "Uncategorized" : draft.category.trimmingCharacters(in: .whitespaces),
-            summary: draft.summary,
-            tags: draft.tags,
+            title: title.isEmpty ? "Untitled" : title,
+            category: category.isEmpty ? "Uncategorized" : category,
+            summary: FrontmatterCodec.singleLine(draft.summary),
+            tags: draft.tags.map(FrontmatterCodec.singleLine),
             createdAt: now,
             updatedAt: now,
-            properties: draft.properties,
+            properties: draft.properties.map {
+                DocProperty(
+                    key: FrontmatterCodec.singleLine($0.key).trimmingCharacters(in: .whitespaces),
+                    value: FrontmatterCodec.singleLine($0.value))
+            },
             body: draft.body)
-        try write(doc, to: folder.appendingPathComponent(doc.fileName))
+        let url = folder.appendingPathComponent(doc.fileName)
+        doc.filePath = url.path
+        try write(doc, to: url)
         load()
         return doc
     }
@@ -140,32 +169,82 @@ final class DocumentStore {
     /// yet are the same directory entry on a case-insensitive volume — removing the
     /// "old" one there would delete the file that was just written.
     @discardableResult
+    func update(filePath: String, draft: DocDraft) throws -> OpsDocument {
+        try ensureUnlocked()
+        guard let existing = document(filePath: filePath) else {
+            throw DocumentStoreError.documentNotFound(id: filePath)
+        }
+        return try updateDocument(existing, draft: draft)
+    }
+
+    @discardableResult
     func update(id: String, draft: DocDraft) throws -> OpsDocument {
         try ensureUnlocked()
         guard let existing = document(id: id) else { throw DocumentStoreError.documentNotFound(id: id) }
+        return try updateDocument(existing, draft: draft)
+    }
+
+    private func updateDocument(_ existing: OpsDocument, draft: DocDraft) throws -> OpsDocument {
+        try validateProperties(draft.properties)
+        let title = FrontmatterCodec.singleLine(draft.title).trimmingCharacters(in: .whitespaces)
+        let category = FrontmatterCodec.singleLine(draft.category).trimmingCharacters(in: .whitespaces)
         var updated = existing
-        updated.title = draft.title.trimmingCharacters(in: .whitespaces).isEmpty ? "Untitled" : draft.title.trimmingCharacters(in: .whitespaces)
-        updated.category = draft.category.trimmingCharacters(in: .whitespaces).isEmpty ? "Uncategorized" : draft.category.trimmingCharacters(in: .whitespaces)
-        updated.summary = draft.summary
-        updated.tags = draft.tags
-        updated.properties = draft.properties
+        updated.title = title.isEmpty ? "Untitled" : title
+        updated.category = category.isEmpty ? "Uncategorized" : category
+        updated.summary = FrontmatterCodec.singleLine(draft.summary)
+        updated.tags = draft.tags.map(FrontmatterCodec.singleLine)
+        updated.properties = draft.properties.map {
+            DocProperty(
+                key: FrontmatterCodec.singleLine($0.key).trimmingCharacters(in: .whitespaces),
+                value: FrontmatterCodec.singleLine($0.value))
+        }
         updated.body = draft.body
         updated.updatedAt = FrontmatterCodec.nowISO()
         let oldURL = fileURL(for: existing)
-        let newURL = folder.appendingPathComponent(updated.fileName)
+        let candidateURL = folder.appendingPathComponent(updated.fileName)
+        let newURL: URL
+        if candidateURL != oldURL,
+           FileManager.default.fileExists(atPath: candidateURL.path),
+           !isSameFile(oldURL, candidateURL) {
+            newURL = oldURL
+        } else {
+            newURL = candidateURL
+        }
+        updated.filePath = newURL.path
         try write(updated, to: newURL)
         if oldURL != newURL, !isSameFile(oldURL, newURL) {
-            try? FileManager.default.removeItem(at: oldURL)
+            do {
+                try FileManager.default.removeItem(at: oldURL)
+            } catch {
+                try? FileManager.default.removeItem(at: newURL)
+                throw error
+            }
         }
         load()
         return updated
     }
 
+    func trash(filePath: String) throws {
+        try ensureUnlocked()
+        guard let doc = document(filePath: filePath) else { return }
+        try FileManager.default.trashItem(at: fileURL(for: doc), resultingItemURL: nil)
+        load()
+    }
+
     func trash(id: String) throws {
         try ensureUnlocked()
         guard let doc = document(id: id) else { return }
-        try FileManager.default.trashItem(at: fileURL(for: doc), resultingItemURL: nil)
-        load()
+        try trash(filePath: fileURL(for: doc).path)
+    }
+
+    private func validateProperties(_ properties: [DocProperty]) throws {
+        for prop in properties {
+            let trimmed = prop.key.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { continue }
+            if !FrontmatterCodec.isValidPropertyKey(prop.key) {
+                throw DocumentStoreError.invalidPropertyKey(key: trimmed)
+            }
+        }
     }
 
     /// Case-insensitive substring over title, category, tags and body; snippet around the first body hit; sorted by title.
@@ -229,6 +308,11 @@ final class DocumentStore {
     }
 
     private func write(_ doc: OpsDocument, to url: URL) throws {
+        let parent = url.standardizedFileURL.deletingLastPathComponent().path
+        let root = folder.standardizedFileURL.path
+        guard parent == root, FrontmatterCodec.isValidID(doc.id) else {
+            throw DocumentStoreError.invalidDocumentID(id: doc.id)
+        }
         let data = Data(FrontmatterCodec.serialize(doc).utf8)
         try data.write(to: url, options: .atomic)
     }

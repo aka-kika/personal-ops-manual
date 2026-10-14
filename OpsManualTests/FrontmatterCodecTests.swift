@@ -65,6 +65,20 @@ final class FrontmatterCodecTests: XCTestCase {
 
     func testMissingIdReturnsNil() {
         XCTAssertNil(FrontmatterCodec.document(from: "---\ntitle: T\n---\nbody"))
+        XCTAssertNil(FrontmatterCodec.document(from: "---\ntitle: T\nid: ../outside\n---\nbody"))
+        XCTAssertNil(FrontmatterCodec.document(from: "---\ntitle: T\nid: a/b\n---\nbody"))
+    }
+
+    func testNewlineInFieldValuesDoesNotBreakFrontmatter() throws {
+        var doc = try XCTUnwrap(FrontmatterCodec.document(from: sample))
+        doc.title = "Line 1\nLine 2"
+        doc.summary = "First\r\nSecond: value"
+        doc.properties = [DocProperty(key: "note", value: "a\nb")]
+        let roundTripped = try XCTUnwrap(FrontmatterCodec.document(from: FrontmatterCodec.serialize(doc)))
+        XCTAssertEqual(roundTripped.title, "Line 1 Line 2")
+        XCTAssertEqual(roundTripped.summary, "First Second: value")
+        XCTAssertEqual(roundTripped.properties, [DocProperty(key: "note", value: "a b")])
+        XCTAssertEqual(roundTripped.id, doc.id)
     }
 
     func testFileNameAndSlug() {

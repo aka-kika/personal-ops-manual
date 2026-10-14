@@ -40,10 +40,18 @@ final class WikiLinkTests: XCTestCase {
         XCTAssertEqual(WikiLinks.resolve("`[[Nowhere]]`") { _ in nil }, "`[[Nowhere]]`")
     }
 
-    func testDocURLRoundTrip() {
-        let url = WikiLinks.url(forDoc: "abc-123")
+    func testDocURLRoundTrip() throws {
+        let url = try XCTUnwrap(WikiLinks.url(forDoc: "abc-123"))
         XCTAssertEqual(url.absoluteString, "opsmanual://doc/abc-123")
         XCTAssertEqual(WikiLinks.docID(from: url), "abc-123")
         XCTAssertNil(WikiLinks.docID(from: URL(string: "https://example.com")!))
+    }
+
+    func testUnsafeIDDoesNotCrashWikiLinks() throws {
+        let unsafeID = "id with spaces % [brackets] (parens)"
+        let url = try XCTUnwrap(WikiLinks.url(forDoc: unsafeID))
+        XCTAssertEqual(WikiLinks.docID(from: url), unsafeID)
+        let out = WikiLinks.resolve("See [[Page]].") { _ in unsafeID }
+        XCTAssertTrue(out.hasPrefix("See [Page](opsmanual://doc/"))
     }
 }

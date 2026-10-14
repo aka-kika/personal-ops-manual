@@ -11,14 +11,20 @@ enum WikiLinks {
     /// Mirrors Node's /(```[\s\S]*?```|`[^`\n]*`)/ split.
     private nonisolated(unsafe) static let codeSpan = /```[\s\S]*?```|`[^`\n]*`/
 
-    static func url(forDoc id: String) -> URL {
-        URL(string: "\(scheme)://doc/\(id)")!
+    private static let idAllowed = CharacterSet.urlPathAllowed.subtracting(CharacterSet(charactersIn: "/()"))
+
+    static func url(forDoc id: String) -> URL? {
+        guard !id.isEmpty,
+              let encoded = id.addingPercentEncoding(withAllowedCharacters: idAllowed)
+        else { return nil }
+        return URL(string: "\(scheme)://doc/\(encoded)")
     }
 
     static func docID(from url: URL) -> String? {
         guard url.scheme == scheme, url.host() == "doc" else { return nil }
-        let id = url.path().trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        return id.isEmpty ? nil : id
+        let raw = url.path().trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let id = raw.removingPercentEncoding, !id.isEmpty else { return nil }
+        return id
     }
 
     static func linkedTitles(in body: String) -> [String] {
@@ -32,8 +38,8 @@ enum WikiLinks {
             String(prose).replacing(pattern) { match in
                 let title = String(match.output.1).trimmingCharacters(in: .whitespaces)
                 let label = match.output.2.map { String($0).trimmingCharacters(in: .whitespaces) } ?? title
-                guard let id = idForTitle(title) else { return label }
-                return "[\(label)](\(url(forDoc: id).absoluteString))"
+                guard let id = idForTitle(title), let url = url(forDoc: id) else { return label }
+                return "[\(label)](\(url.absoluteString))"
             }
         }
     }

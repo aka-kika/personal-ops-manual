@@ -5,6 +5,7 @@ struct ContentView: View {
     @Bindable var store: DocumentStore
     @Bindable var state: AppState
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var trashError: String?
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -33,14 +34,26 @@ struct ContentView: View {
             get: { state.trashCandidate != nil }, set: { if !$0 { state.trashCandidate = nil } })) {
             Button("Move to Trash", role: .destructive) {
                 if let doc = state.trashCandidate {
-                    try? store.trash(id: doc.id)
-                    if state.selectedDocID == doc.id { state.selectedDocID = nil }
+                    do {
+                        try store.trash(filePath: store.fileURL(for: doc).path)
+                        if state.selectedDocID == doc.id, store.document(id: doc.id) == nil {
+                            state.selectedDocID = nil
+                        }
+                    } catch {
+                        trashError = error.localizedDescription
+                    }
                 }
                 state.trashCandidate = nil
             }
             Button("Cancel", role: .cancel) { state.trashCandidate = nil }
         } message: {
             Text("The file goes to the Finder Trash and can be put back.")
+        }
+        .alert("Cannot Move to Trash", isPresented: Binding(
+            get: { trashError != nil }, set: { if !$0 { trashError = nil } })) {
+            Button("OK", role: .cancel) { trashError = nil }
+        } message: {
+            Text(trashError ?? "")
         }
         .overlay {
             // A floating palette instead of a sheet: a click outside closes it, Escape too.
@@ -84,12 +97,17 @@ struct ContentView: View {
 
     func handle(_ action: DocumentContextAction, _ doc: OpsDocument) {
         switch action {
-        case .edit: state.editorTarget = .edit(id: doc.id)
+        case .edit: state.editorTarget = .edit(id: doc.id, filePath: doc.filePath)
         case .showInFinder: NSWorkspace.shared.activateFileViewerSelecting([store.fileURL(for: doc)])
         case .copyPath:
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(store.fileURL(for: doc).path, forType: .string)
-        case .trash: state.trashCandidate = doc
+        case .trash:
+            if store.isLocked {
+                trashError = LockedError().errorDescription
+            } else {
+                state.trashCandidate = doc
+            }
         }
     }
 }

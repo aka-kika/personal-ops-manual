@@ -24,7 +24,7 @@ struct DocumentListView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 1) {
-                        ForEach(docs) { doc in
+                        ForEach(docs, id: \.filePath) { doc in
                             DocumentRow(doc: doc, excerpt: store.excerpt(for: doc), selected: state.selectedDocID == doc.id)
                                 .onTapGesture { state.selectedDocID = doc.id }
                                 .contextMenu { DocumentContextMenu(doc: doc, action: onContextAction) }

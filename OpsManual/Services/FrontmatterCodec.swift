@@ -66,9 +66,35 @@ enum FrontmatterCodec {
         return parsed
     }
 
+    static func isValidID(_ id: String) -> Bool {
+        !id.isEmpty
+            && !id.contains("/")
+            && !id.contains("\\")
+            && !id.contains("..")
+            && !id.contains("\0")
+            && id != "."
+    }
+
+    static func isValidPropertyKey(_ key: String) -> Bool {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty
+            && !OpsDocument.knownKeys.contains(trimmed)
+            && !trimmed.contains(":")
+            && !trimmed.contains("\n")
+            && !trimmed.contains("\r")
+    }
+
+    static func singleLine(_ value: String) -> String {
+        value.replacingOccurrences(of: "\r\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+    }
+
     static func document(from raw: String) -> OpsDocument? {
         let p = parse(raw)
-        guard let id = p.value("id"), !id.isEmpty else { return nil }
+        guard let rawID = p.value("id") else { return nil }
+        let id = singleLine(rawID).trimmingCharacters(in: .whitespaces)
+        guard isValidID(id) else { return nil }
         let props = p.fields.filter { !OpsDocument.knownKeys.contains($0.key) }
             .map { DocProperty(key: $0.key, value: $0.value) }
         return OpsDocument(
@@ -85,10 +111,11 @@ enum FrontmatterCodec {
 
     static func serialize(_ doc: OpsDocument) -> String {
         let tagLines = doc.tags.isEmpty ? "  []" : doc.tags.map { "  - \(escape($0))" }.joined(separator: "\n")
-        let summaryLine = doc.summary.isEmpty ? "" : "summary: \(escape(doc.summary))\n"
+        let summary = singleLine(doc.summary)
+        let summaryLine = summary.isEmpty ? "" : "summary: \(escape(summary))\n"
         let custom = doc.properties
-            .filter { !$0.key.trimmingCharacters(in: .whitespaces).isEmpty && !$0.value.trimmingCharacters(in: .whitespaces).isEmpty }
-            .map { "\($0.key): \(escape($0.value))" }
+            .filter { isValidPropertyKey($0.key) && !singleLine($0.value).trimmingCharacters(in: .whitespaces).isEmpty }
+            .map { "\($0.key.trimmingCharacters(in: .whitespacesAndNewlines)): \(escape($0.value))" }
             .joined(separator: "\n")
         let customBlock = custom.isEmpty ? "" : custom + "\n"
         return """
@@ -97,9 +124,9 @@ enum FrontmatterCodec {
         category: \(escape(doc.category))
         \(summaryLine)tags:
         \(tagLines)
-        createdAt: \(doc.createdAt)
-        updatedAt: \(doc.updatedAt)
-        id: \(doc.id)
+        createdAt: \(singleLine(doc.createdAt))
+        updatedAt: \(singleLine(doc.updatedAt))
+        id: \(singleLine(doc.id))
         \(customBlock)---
 
         \(doc.body)
@@ -108,9 +135,10 @@ enum FrontmatterCodec {
 
     /// Quote only when the value contains one of : # newline [ ] { } , " '
     static func escape(_ value: String) -> String {
+        let clean = singleLine(value)
         let special: Set<Character> = [":", "#", "\n", "[", "]", "{", "}", ",", "\"", "'"]
-        guard value.contains(where: { special.contains($0) }) else { return value }
-        return "\"" + value.replacingOccurrences(of: "\"", with: "\\\"") + "\""
+        guard clean.contains(where: { special.contains($0) }) else { return clean }
+        return "\"" + clean.replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 
     private static func listItem(_ line: String) -> String? {

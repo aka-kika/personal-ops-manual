@@ -7,11 +7,11 @@ enum SidebarSelection: Hashable {
 
 enum EditorTarget: Identifiable, Hashable {
     case new(category: String)
-    case edit(id: String)
+    case edit(id: String, filePath: String? = nil)
     var id: String {
         switch self {
         case .new(let c): "new:\(c)"
-        case .edit(let id): "edit:\(id)"
+        case .edit(let id, let filePath): "edit:\(filePath ?? id)"
         }
     }
 }

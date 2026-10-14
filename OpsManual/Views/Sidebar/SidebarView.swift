@@ -69,7 +69,7 @@ struct SidebarView: View {
                 .foregroundStyle(.secondary)
             Spacer()
             if hoveringCategories {
-                Button { state.editorTarget = .new(category: "") } label: {
+                Button { state.editorTarget = .new(category: "__new__") } label: {
                     Image(systemName: "plus").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)

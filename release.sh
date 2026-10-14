@@ -64,7 +64,7 @@ for arg in "$@"; do
       # with the same bundle id are what make the Dock show a stale icon.
       LSREG=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
       "$LSREG" -u "$APP" >/dev/null 2>&1 || true
-      rm -rf "build/Build/Products/Debug/Personal Ops Manual.app" "$HOME/Library/Developer/Xcode/DerivedData"/OpsManual-*/Build/Products/*/"Personal Ops Manual.app" 2>/dev/null || true
+      rm -rf "build/Build/Products/Debug/Personal Ops Manual.app" "$HOME/Library/Developer/Xcode/DerivedData"/OpsManual-*/Build/Products/*/"Personal Ops Manual.app"(N) 2>/dev/null || true
       "$LSREG" -f -R "/Applications/Personal Ops Manual.app" >/dev/null 2>&1 || true
       rm -rf "$HOME/Library/Caches/com.apple.iconservices.store" 2>/dev/null || true
       killall Dock 2>/dev/null || true

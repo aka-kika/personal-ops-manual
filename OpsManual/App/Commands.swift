@@ -11,7 +11,11 @@ struct OpsCommands: Commands {
                 .keyboardShortcut("n", modifiers: .command)
         }
         CommandMenu("Document") {
-            Button("Edit") { if let id = state.selectedDocID { state.editorTarget = .edit(id: id) } }
+            Button("Edit") {
+                if let id = state.selectedDocID, let doc = store.document(id: id) {
+                    state.editorTarget = .edit(id: doc.id, filePath: doc.filePath)
+                }
+            }
                 .keyboardShortcut("e", modifiers: .command)
                 .disabled(state.selectedDocID == nil)
             Button("Show in Finder") {

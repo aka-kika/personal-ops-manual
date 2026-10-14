@@ -15,13 +15,24 @@ struct OpsDocument: Identifiable, Hashable, Sendable {
     var updatedAt: String
     var properties: [DocProperty]
     var body: String
+    var filePath: String = ""
 
     static let knownKeys: Set<String> = ["title", "category", "tags", "createdAt", "updatedAt", "id", "summary"]
 
     var icon: String { properties.first { $0.key == "icon" }?.value ?? "" }
     var updatedDate: Date { FrontmatterCodec.isoFormatter.date(from: updatedAt) ?? .distantPast }
     var createdDate: Date { FrontmatterCodec.isoFormatter.date(from: createdAt) ?? .distantPast }
-    var fileName: String { "\(Self.slugify(title))-\(id).md" }
+    var fileName: String { "\(Self.slugify(title))-\(Self.sanitizeID(id)).md" }
+
+    static func sanitizeID(_ id: String) -> String {
+        let cleaned = id
+            .replacingOccurrences(of: "..", with: "-")
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: "\\", with: "-")
+            .replacingOccurrences(of: "\0", with: "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: ". "))
+        return cleaned.isEmpty ? "untitled" : cleaned
+    }
 
     /// Mirrors the Node app: base36 milliseconds, dash, six base36 chars.
     static func makeID() -> String {
