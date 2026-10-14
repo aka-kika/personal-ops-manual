@@ -49,8 +49,8 @@ targets:
       properties:
         CFBundleName: Personal Ops Manual
         CFBundleDisplayName: Personal Ops Manual
-        CFBundleShortVersionString: "2.2.1"
-        CFBundleVersion: "6"
+        CFBundleShortVersionString: "2.2.2"
+        CFBundleVersion: "7"
         LSMinimumSystemVersion: "26.0"
         NSHighResolutionCapable: true
         NSPrincipalClass: NSApplication
