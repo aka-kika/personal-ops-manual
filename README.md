@@ -59,7 +59,7 @@ Anything you have shipped gets a page too, under GitHub: what it is, where
 the website and the code are, the latest version, and how to install it. One
 place to look instead of five browser tabs.
 
-![A release page: one page per public tool, with website, source, latest release, the install line and the notarization note](docs/screenshots/05-releases-sift.png)
+![The GitHub category: one page per public tool, with website, source, latest release, the install line and the notarization note](docs/screenshots/05-github-sift.png)
 
 ## Only the operator writes, and the folder can enforce it
 
