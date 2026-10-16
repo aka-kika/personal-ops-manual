@@ -218,9 +218,10 @@ more attributes as tables. No emojis. At most one `> [!warning]` or
 
 - The cheapest correct way is the app itself: New Document, or Load Markdown
   File on a draft. It writes the frontmatter and the name for you.
-- Categories are fixed unless the owner adds one: Manual, Machines, Services,
+- Categories are fixed unless the owner adds one: Machines, Services,
   Self-hosted, Automations, Agents, MCP (mine), MCP (third-party), Skills,
-  Domains, Backups, Deployments, Recovery, APIs, Maintenance, Releases, Hooks.
+  Domains, Deployments, Recovery (backup pages go here too), APIs,
+  Maintenance, GitHub, Accounts, Hooks, CLI tools, App Store.
   Servers the owner built go in MCP (mine), everyone else's in MCP
   (third-party).
 - Agent pages carry `icon: <name>` for the glyph: aka, claude, claude-code,
