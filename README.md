@@ -9,7 +9,7 @@
 <img alt="Notarized" src="https://img.shields.io/badge/Developer%20ID-notarized-2DA44E">
 <img alt="MCP server" src="https://img.shields.io/badge/MCP-7%20tools-6E56CF">
 <img alt="Markdown files" src="https://img.shields.io/badge/data-Markdown%20%2B%20YAML-555555">
-<img alt="Version" src="https://img.shields.io/badge/release-2.2.3-blue">
+<img alt="Version" src="https://img.shields.io/badge/release-2.2.4-blue">
 <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-green">
 </p>
 
