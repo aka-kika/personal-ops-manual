@@ -56,7 +56,6 @@ which. One page per thing. Categories are fixed unless you add one.
 
 | Category | Sources to read | One page per |
 |---|---|---|
-| Manual | this repo's docs | how the manual works (one page) |
 | Machines | `hostname`, `sw_vers`, `sysctl hw`, `df`, `tailscale status --json` | Mac, server, phone, tablet |
 | Services | `lsof -iTCP -sTCP:LISTEN`, `launchctl list`, app configs | service with a port |
 | Self-hosted | your hosting dashboards, Docker, the notes you already have | hosted service |
@@ -66,13 +65,15 @@ which. One page per thing. Categories are fixed unless you add one.
 | MCP (third-party) | agent configs | server from someone else |
 | Skills | your skill folders | the collection, the sync |
 | Domains | registrar, DNS, hosting | domain |
-| Backups | Time Machine, offsite scripts, config snapshots | backup route |
 | Deployments | hosting, package registries, GitHub releases | deployment target |
-| Recovery | what has broken before | failure scenario |
+| Recovery | what has broken before; Time Machine, offsite scripts, config snapshots | failure scenario, backup route |
 | APIs | self-hosted APIs, push services, automation platforms | endpoint or API family |
-| Maintenance | recurring chores | routine (weekly, monthly) |
-| Releases | `gh release list`, PyPI, npm, Homebrew | public tool |
+| Maintenance | recurring chores; this repo's docs | routine (weekly, monthly); how the manual works (one page) |
+| GitHub | `gh repo list`, `gh release list`, PyPI, npm, Homebrew | public tool, repo |
+| App Store | App Store Connect | app on the App Store |
+| Accounts | your password manager's item list (names only, never secrets) | account |
 | Hooks | agent hook folders | hook script |
+| CLI tools | `brew list`, `~/.local/bin`, `npm ls -g` | command-line tool |
 
 Rules while gathering:
 

@@ -55,11 +55,11 @@ the first time can read the rules right there.
 
 ![The How this manual works page: where the files live, the app and MCP paths, and the rule that only one agent edits pages](docs/screenshots/04-how-this-manual-works.png)
 
-Anything you have shipped gets a page too, under Releases: what it is, where
+Anything you have shipped gets a page too, under GitHub: what it is, where
 the website and the code are, the latest version, and how to install it. One
 place to look instead of five browser tabs.
 
-![The Releases category: one page per public tool, with website, source, latest release, the install line and the notarization note](docs/screenshots/05-releases-sift.png)
+![A release page: one page per public tool, with website, source, latest release, the install line and the notarization note](docs/screenshots/05-releases-sift.png)
 
 ## Only the operator writes, and the folder can enforce it
 
