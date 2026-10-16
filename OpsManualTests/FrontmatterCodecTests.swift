@@ -97,6 +97,9 @@ final class FrontmatterCodecTests: XCTestCase {
     func testCLIToolsCategoryHasATerminalIcon() {
         XCTAssertEqual(CategoryIcons.symbol(for: "CLI tools"), "terminal")
         XCTAssertEqual(CategoryIcons.symbol(for: "Unknown"), "folder")
+        XCTAssertEqual(CategoryIcons.symbol(for: "App Store"), "bag")
+        XCTAssertEqual(CategoryIcons.symbol(for: "GitHub"), "arrow.triangle.branch")
+        XCTAssertEqual(CategoryIcons.symbol(for: "Accounts"), "person.crop.circle")
     }
 
     func testMakeIDShape() {
