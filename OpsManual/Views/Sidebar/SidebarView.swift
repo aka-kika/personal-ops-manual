@@ -13,16 +13,16 @@ struct SidebarView: View {
                 HeaderChromeButton(systemImage: "magnifyingglass", help: "Search") { state.isSearchPresented = true }
                 HeaderChromeButton(systemImage: "gearshape", help: "Settings") { openSettings() }
             } title: {
-                navRow(.all, label: "All Documents", font: OpsTheme.titleFont, symbol: nil, count: store.documents.count)
+                navRow(.all, label: "All Documents", font: OpsTheme.titleFont, icon: nil, count: store.documents.count)
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    navRow(.recent, label: "Recent", font: OpsTheme.rowFont, symbol: "clock", count: nil)
+                    navRow(.recent, label: "Recent", font: OpsTheme.rowFont, icon: .symbol("clock"), count: nil)
                     inboxRow
                     sectionHeader
                     ForEach(store.categories, id: \.name) { cat in
                         navRow(.category(cat.name), label: cat.name, font: OpsTheme.rowFont,
-                               symbol: CategoryIcons.symbol(for: cat.name), count: cat.count)
+                               icon: CategoryIcons.icon(for: cat.name), count: cat.count)
                     }
                 }
                 .padding(.horizontal, 8)
@@ -83,18 +83,26 @@ struct SidebarView: View {
         .onHover { hoveringCategories = $0 }
     }
 
-    private func navRow(_ target: SidebarSelection, label: String, font: Font, symbol: String?, count: Int?) -> some View {
+    private func navRow(_ target: SidebarSelection, label: String, font: Font, icon: CategoryIcons.Icon?, count: Int?) -> some View {
         let selected = state.selection == target
         return Button {
             state.selection = target
             state.selectedDocID = nil
         } label: {
             HStack(spacing: 8) {
-                if let symbol {
-                    Image(systemName: symbol)
+                switch icon {
+                case .symbol(let name):
+                    Image(systemName: name)
                         .font(OpsTheme.sidebarIcon)
                         .foregroundStyle(.secondary)
                         .frame(width: 16)
+                case .asset(let name):
+                    Image(name).renderingMode(.template).resizable().interpolation(.high)
+                        .frame(width: 14, height: 14)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 16)
+                case nil:
+                    EmptyView()
                 }
                 Text(label).font(font).lineLimit(1)
                 Spacer(minLength: 4)
@@ -109,6 +117,6 @@ struct SidebarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, symbol == nil ? -8 : 0)
+        .padding(.horizontal, icon == nil ? -8 : 0)
     }
 }

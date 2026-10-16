@@ -1,6 +1,13 @@
 import Foundation
 
 enum CategoryIcons {
+    enum Icon: Equatable { case symbol(String), asset(String) }
+
+    /// Brand marks from the asset catalog, for categories named after a service.
+    private static let assets: [String: String] = [
+        "GitHub": "brand-github",
+    ]
+
     private static let map: [String: String] = [
         "Accounts": "person.crop.circle",
         "Agents": "cpu",
@@ -10,7 +17,6 @@ enum CategoryIcons {
         "CLI tools": "terminal",
         "Deployments": "paperplane",
         "Domains": "globe",
-        "GitHub": "arrow.triangle.branch",
         "Hooks": "link",
         "Machines": "laptopcomputer",
         "Maintenance": "wrench",
@@ -23,4 +29,8 @@ enum CategoryIcons {
     ]
 
     static func symbol(for category: String) -> String { map[category] ?? "folder" }
+
+    static func icon(for category: String) -> Icon {
+        assets[category].map(Icon.asset) ?? .symbol(symbol(for: category))
+    }
 }

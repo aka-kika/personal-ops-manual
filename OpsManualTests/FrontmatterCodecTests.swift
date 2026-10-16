@@ -98,7 +98,8 @@ final class FrontmatterCodecTests: XCTestCase {
         XCTAssertEqual(CategoryIcons.symbol(for: "CLI tools"), "terminal")
         XCTAssertEqual(CategoryIcons.symbol(for: "Unknown"), "folder")
         XCTAssertEqual(CategoryIcons.symbol(for: "App Store"), "bag")
-        XCTAssertEqual(CategoryIcons.symbol(for: "GitHub"), "arrow.triangle.branch")
+        XCTAssertEqual(CategoryIcons.icon(for: "GitHub"), .asset("brand-github"))
+        XCTAssertEqual(CategoryIcons.icon(for: "App Store"), .symbol("bag"))
         XCTAssertEqual(CategoryIcons.symbol(for: "Accounts"), "person.crop.circle")
     }
 
