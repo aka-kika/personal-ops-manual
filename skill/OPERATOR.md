@@ -97,7 +97,7 @@ shows the change at once; the MCP reads the same file on the next call.
   `\"`. Nothing else is quoted. One blank line between the closing `---` and
   the body.
 - **`updatedAt`** becomes the current time in ISO 8601 UTC with milliseconds
-  (`2026-09-14T15:04:05.000Z`) whenever the body or a field changes.
+  (`2026-09-14T15:04:05.000Z`) whenever the body or a field changes. Take the time from `date -u +%Y-%m-%dT%H:%M:%S.000Z`, never a guessed or round one: a time in the future pins the page above the real recent ones in the app.
   `createdAt` never changes. `date` (the custom key) stays the creation date.
 - **The Verified line is the page's signature.** The last block of every page
   is a rule, then `> **Verified** YYYY-MM-DD by <how>`: the command you ran,
