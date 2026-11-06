@@ -125,6 +125,8 @@ struct ContentView: View {
             InboxDetailView(store: store, state: state).titleBarColumn()
         } else if let id = state.selectedDocID, let doc = store.document(id: id) {
             ReaderView(doc: doc, store: store, state: state, onAction: handle).titleBarColumn()
+        } else if case .category(let name) = state.selection {
+            CategoryOverviewView(category: name, store: store, state: state).titleBarColumn()
         } else {
             EmptyState(text: "Select a document").titleBarColumn()
         }

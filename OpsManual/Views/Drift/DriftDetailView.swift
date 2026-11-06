@@ -251,7 +251,6 @@ struct DriftPageView: View {
                     if let error = drift.reportError {
                         DriftNote(symbol: "exclamationmark.triangle", text: error)
                     }
-                    DriftNote(symbol: "doc.text", text: "Read only. Drift never edits a page; Report adds one line to the Inbox for the operator.")
                 }
                 .frame(maxWidth: 640, alignment: .leading)
                 .padding(.horizontal, OpsChrome.columnHeaderHorizontalPadding)
@@ -386,11 +385,13 @@ private struct ClaimRow: View {
             if isReported {
                 DriftTag(text: "Reported")
             } else {
+                // Icon only (Kika, 2026-11-06: "only icon for send, calmer").
                 Button(action: onReport) {
-                    Label("Report", systemImage: "paperplane").font(.system(size: 12, weight: .medium))
+                    Image(systemName: "paperplane").font(.system(size: 12, weight: .medium))
                 }
                 .controlSize(.small)
-                .help("Add one line to the Inbox for the operator: \(result.reportWhat)")
+                .help("Send to operator")
+                .accessibilityLabel("Send to operator")
             }
         } else {
             Color.clear.frame(height: 1)

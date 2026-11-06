@@ -1,0 +1,137 @@
+import SwiftUI
+import AppKit
+
+/// The detail column when a category is picked and no page is: what the category
+/// holds and its rules. The rules come from the category's own overview page
+/// ("Hooks overview", "App Store index") when it has one; otherwise its pages are listed.
+struct CategoryOverviewView: View {
+    let category: String
+    @Bindable var store: DocumentStore
+    @Bindable var state: AppState
+
+    /// The page that describes the category: its title says "overview" or "index".
+    static func overviewPage(in docs: [OpsDocument], category: String) -> OpsDocument? {
+        let c = category.lowercased()
+        var best: OpsDocument?
+        var bestScore = Int.max
+        for doc in docs where doc.category == category {
+            let t = doc.title.lowercased()
+            let score: Int
+            if t == c + " overview" || t == c + " index" {
+                score = 0
+            } else if t.hasSuffix(" overview") || t.hasSuffix(" index") {
+                score = 1
+            } else if t.contains("overview") {
+                score = 2
+            } else {
+                continue
+            }
+            if score < bestScore || (score == bestScore && doc.title < (best?.title ?? "")) {
+                best = doc
+                bestScore = score
+            }
+        }
+        return best
+    }
+
+    var body: some View {
+        let docs = store.activeDocuments.filter { $0.category == category }
+        let overview = Self.overviewPage(in: docs, category: category)
+        VStack(spacing: 0) {
+            ColumnHeader {
+                if let overview {
+                    HeaderChromeButton(systemImage: "doc.text", help: "Open \(overview.title)") {
+                        state.selectedDocID = overview.id
+                    }
+                }
+            } title: {
+                HStack(alignment: .top, spacing: 8) {
+                    categoryIcon.padding(.top, 2)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(category).font(OpsTheme.titleFont).lineLimit(1)
+                        Text(subtitle(docs)).font(OpsTheme.subtitleFont).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if let overview {
+                        Text("FROM \(overview.title.uppercased())")
+                            .font(OpsTheme.sectionLabelFont).tracking(0.5).foregroundStyle(.secondary)
+                            .padding(.bottom, 10)
+                        if !overview.summary.isEmpty {
+                            Text(overview.summary).font(.system(size: 13)).foregroundStyle(.secondary).padding(.bottom, 14)
+                        }
+                        MarkdownView(markdown: resolved(overview), baseURL: store.folder)
+                    } else {
+                        Text("PAGES").font(OpsTheme.sectionLabelFont).tracking(0.5).foregroundStyle(.secondary)
+                            .padding(.bottom, 6)
+                        ForEach(docs.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }) { doc in
+                            Button {
+                                state.selectedDocID = doc.id
+                            } label: {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(doc.title).font(OpsTheme.rowTitleFont)
+                                    let excerpt = store.excerpt(for: doc)
+                                    if !excerpt.isEmpty {
+                                        Text(excerpt).font(OpsTheme.excerptFont).foregroundStyle(.secondary).lineLimit(1)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 6)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        DriftNote(symbol: "doc.text",
+                                  text: "A page titled \"\(category) overview\" would show here instead: what the category holds and its rules.")
+                            .padding(.top, 14)
+                    }
+                }
+                .frame(maxWidth: OpsTheme.readerMaxWidth, alignment: .leading)
+                .padding(.horizontal, OpsChrome.columnHeaderHorizontalPadding)
+                .padding(.top, 14)
+                .padding(.bottom, 40)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .hidesTopScrollEdgeEffect()
+            .id(category)
+        }
+        .background(OpsTheme.canvas)
+        .environment(\.openURL, OpenURLAction { url in
+            if let id = WikiLinks.docID(from: url) {
+                state.open(docID: id, in: store)
+                return .handled
+            }
+            if url.scheme == "http" || url.scheme == "https" {
+                NSWorkspace.shared.open(url)
+                return .handled
+            }
+            return .discarded
+        })
+    }
+
+    @ViewBuilder
+    private var categoryIcon: some View {
+        switch CategoryIcons.icon(for: category) {
+        case .symbol(let name):
+            Image(systemName: name).font(.system(size: 15, weight: .light)).foregroundStyle(.secondary)
+        case .asset(let name):
+            Image(name).renderingMode(.template).resizable().interpolation(.high)
+                .frame(width: 15, height: 15).foregroundStyle(.secondary)
+        }
+    }
+
+    private func subtitle(_ docs: [OpsDocument]) -> String {
+        var parts = [docs.count == 1 ? "1 page" : "\(docs.count) pages"]
+        if let last = docs.map(\.updatedDate).max(), last > .distantPast {
+            parts.append("updated \(ReaderDate.format(last))")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func resolved(_ doc: OpsDocument) -> String {
+        let stripped = MarkdownText.stripLeadingTitle(doc.body, title: doc.title)
+        return WikiLinks.resolve(stripped) { store.idForTitle($0) }
+    }
+}
