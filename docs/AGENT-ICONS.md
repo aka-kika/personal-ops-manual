@@ -21,6 +21,8 @@ belong to their owners; the glyphs identify pages and imply no endorsement.
 | kimi | thesvg.org, kimi/color.svg and a light variant (themed pair) |
 | gemini, deepseek, qwen, mistral, perplexity, copilot | @lobehub/icons-static-svg (MIT), colour variants, 2026-09-14 |
 | ollama, openai, windsurf, codex, opencode | @lobehub/icons-static-svg (MIT), monochrome; themed pairs with `#1D1D1F` on light and `#F5F5F7` on dark, 2026-09-14 |
+| grok-bot | the Grok Bot Mac app's own icon (`icon.icns` of /Applications/Grok Bot.app, 0.79.2), 256 px PNG, 2026-11-06 |
+| codync | leepokai/Codync, `apps/desktop/resources/icon.svg` (Apache-2.0), 2026-11-06 |
 
 To add one: drop an SVG or PNG into a new `agent-<name>.imageset` with a
 `Contents.json` like its neighbours, add the name to `AgentGlyph.known`, and
