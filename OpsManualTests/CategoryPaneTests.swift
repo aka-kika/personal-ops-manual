@@ -152,33 +152,34 @@ final class AppStoreStatusTests: XCTestCase {
     }
 
     func testPeachOnlyForRejectedOrALongWait() {
-        let docs = [app("Static QR (App Store)", summary: "$4.99 (app 1)"), app("Background Off (App Store)", summary: "$1.99 (app 2)"),
-                    app("Lane (App Store)", summary: "free (app 3)"), app("App Store index", summary: "Every app")]
+        let docs = [app("Static QR (App Store)", summary: "$4.99 (app 1000000001)"), app("Background Off (App Store)", summary: "$1.99 (app 1000000002)"),
+                    app("Lane (App Store)", summary: "free (app 1000000003)"), app("App Store index", summary: "Every app")]
         var facts = LiveFacts()
         let day: TimeInterval = 86_400
-        facts.appStore = ["1": .init(state: "WAITING_FOR_REVIEW", version: "1.0", submittedAt: now.addingTimeInterval(-11 * day)),
-                          "2": .init(state: "READY_FOR_DISTRIBUTION", version: "1.0.3", submittedAt: nil)]
-        facts.appStoreFailed = ["3"]
+        facts.appStore = ["1000000001": .init(state: "WAITING_FOR_REVIEW", version: "1.0", submittedAt: now.addingTimeInterval(-11 * day)),
+                          "1000000002": .init(state: "READY_FOR_DISTRIBUTION", version: "1.0.3", submittedAt: nil)]
+        facts.appStoreFailed = ["1000000003"]
         facts.appStoreAt = now
+        XCTAssertEqual(docs.compactMap(AppStorePage.appID), ["1000000001", "1000000002", "1000000003"])
         var s = CategoryStatus.compute(title: "App Store", .init(docs: docs, checkResults: [], github: GitHubSnapshot(), facts: facts, now: now))
         XCTAssertEqual(s.rows.map(\.name), ["Background Off", "Lane", "Static QR"])
         XCTAssertEqual(s.rows.map(\.value), ["on sale · 1.0.3 · $1.99", "couldn't check", "waiting for review, 11 days · 1.0 · $4.99"])
         XCTAssertEqual(s.rows.map(\.attention), [false, false, false])
         XCTAssertEqual(s.parts.map(\.text), ["1 on sale", "1 in review", "none rejected"])
 
-        facts.appStore?["1"]?.submittedAt = now.addingTimeInterval(-20 * day)
-        facts.appStore?["3"] = .init(state: "REJECTED", version: "1.1", submittedAt: now.addingTimeInterval(-2 * day))
+        facts.appStore?["1000000001"]?.submittedAt = now.addingTimeInterval(-20 * day)
+        facts.appStore?["1000000003"] = .init(state: "REJECTED", version: "1.1", submittedAt: now.addingTimeInterval(-2 * day))
         facts.appStoreFailed = []
         s = CategoryStatus.compute(title: "App Store", .init(docs: docs, checkResults: [], github: GitHubSnapshot(), facts: facts, now: now))
         XCTAssertEqual(s.rows.map(\.attention), [false, true, true])
-        XCTAssertEqual(s.rows[1].value, "rejected, 2 days · 1.1 · free")
+        XCTAssertEqual(s.rows.map(\.value).dropFirst().first, "rejected, 2 days · 1.1 · free")
         XCTAssertEqual(s.parts.map(\.attention), [false, true, true])
         XCTAssertEqual(s.visual, .ring(fine: 1, attention: 2))
         XCTAssertNil(s.unavailable)
     }
 
     func testNotReadYetSaysSo() {
-        let docs = [app("Static QR (App Store)", summary: "(app 1)")]
+        let docs = [app("Static QR (App Store)", summary: "(app 1000000001)")]
         var facts = LiveFacts()
         facts.ascMissing = true
         let s = CategoryStatus.compute(title: "App Store", .init(docs: docs, checkResults: [], github: GitHubSnapshot(), facts: facts, now: now))
