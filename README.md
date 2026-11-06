@@ -115,18 +115,20 @@ maintenance:
 scripts/opsmanual check     # or: "/Applications/Personal Ops Manual.app/Contents/MacOS/Personal Ops Manual" --check
 ```
 
-The app checks when Drift opens and by itself once a day (Settings > General >
-Drift). The score card follows the Health page of
+The app checks when Drift opens, by itself once a day (Settings > General >
+Drift), and again with the button in the window's top-right corner or Cmd-R. The score card follows the Health page of
 [Cortex](https://github.com/envibagus/cortex) (MIT); ideas only, no code
 copied.
 
 ## GitHub, MCP, Inbox
 
-GitHub pages show as repos, grouped Private then Public, with one dot when
-work is not saved yet; a repo's page shows its branch, uncommitted and unpushed
+GitHub pages show as one A to Z list, a lock or globe before each name and
+one dot when work is not saved yet; a repo's page shows its branch, uncommitted and unpushed
 work, latest tag, open pull requests and last build. The data comes from the
 `gh` login already on the Mac and local `git`; the app holds no token. The two
-MCP categories share one row. The Inbox row shows the reports inside the app.
+MCP categories share one row and one A to Z list (a small person mark on your
+own servers). A category with no page open shows what lives there, one status
+line with a small ring, segments or date line, and the newest changes. The Inbox row shows the reports inside the app.
 Pages with `status: parked` or `archived` sit under one Parked row.
 
 ## Install
