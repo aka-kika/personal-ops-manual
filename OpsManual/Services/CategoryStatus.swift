@@ -1,8 +1,9 @@
 import Foundation
 
-/// The category pane (Kika, 2026-11-06, mockup category-pane-v4): what lives here,
-/// one quiet status line, last changed. Status is plain text: numbers in normal
-/// weight, peach only where something needs care, zeros said in words.
+/// The category pane (Kika, 2026-11-06, mockups category-pane-v4 and v5): what lives
+/// here, one quiet status line, last changed. Status is plain text: numbers in normal
+/// weight, peach only where something needs care, zeros said in words. v5 adds one
+/// small visual beside it: a thin ring, thin segments, or one line of dates.
 struct CategoryStatus: Equatable {
     struct Part: Equatable {
         var text: String
@@ -12,9 +13,28 @@ struct CategoryStatus: Equatable {
         var name: String
         var value: String
         var attention = false
+        /// 0...1: a short soft bar after the value (how much waits, against the others).
+        var amount: Double? = nil
+    }
+
+    /// One dot on the date line: days from today, peach when inside the window.
+    struct DatePoint: Equatable {
+        var name: String
+        var days: Double
+        var attention: Bool
+    }
+
+    enum Visual: Equatable {
+        /// A thin ring: sage for what is fine, a short peach arc for what needs care.
+        case ring(fine: Int, attention: Int)
+        /// One thin segment per thing, filled when fine, hollow when not (Machines).
+        case segments([Bool])
+        /// A hairline from today to `span` days, a faint band for the first `window` days.
+        case dates([DatePoint], span: Int, window: Int, end: String)
     }
 
     var label = "STATUS"
+    var visual: Visual?
     var parts: [Part] = []
     var rows: [Row] = []
     /// Shown grey instead of a status when the source could not be read.
@@ -41,8 +61,8 @@ struct CategoryStatus: Equatable {
         case GitHubMatcher.category: return github(input)
         case "Machines": return machines(input)
         case "MCP": return mcp(input)
-        case "Accounts": return dated(input, key: "renews", window: 30, noun: ("renewal", "renewals"), soon: "in the next 30 days")
-        case "Domains": return dated(input, key: "expires", window: 60, noun: ("expiry", "expiries"), soon: "in the next 60 days")
+        case "Accounts": return dated(input, key: "renews", window: 30, span: 90, end: "in 90 days", noun: ("renewal", "renewals"), soon: "in the next 30 days")
+        case "Domains": return dated(input, key: "expires", window: 60, span: 365, end: "in a year", noun: ("expiry", "expiries"), soon: "in the next 60 days")
         case "Automations": return automations(input)
         case "Services", "Self-hosted": return upDown(input)
         default: return generic(input)
@@ -58,13 +78,17 @@ struct CategoryStatus: Equatable {
         s.parts = [count(unsaved.count, "repo with work not saved", "repos with work not saved", attention: true),
                    count(prs, "open pull request", "open pull requests", attention: true),
                    count(failing.count, "failing build", "failing builds", attention: true)]
+        let waiting = unsaved.compactMap(\.1.local).map { $0.uncommitted + $0.ahead }.max() ?? 0
         for (doc, info) in unsaved {
             guard let local = info.local else { continue }
             var bits: [String] = []
             if local.uncommitted > 0 { bits.append("\(local.uncommitted) uncommitted") }
             if local.ahead > 0 { bits.append("\(local.ahead) unpushed") }
-            s.rows.append(Row(name: doc.title, value: bits.joined(separator: " · "), attention: true))
+            let amount = waiting > 0 ? Double(local.uncommitted + local.ahead) / Double(waiting) : nil
+            s.rows.append(Row(name: doc.title, value: bits.joined(separator: " · "), attention: true, amount: amount))
         }
+        let repos = infos.filter { $0.1.remote != nil || ($0.1.local?.isRepo ?? false) }.count
+        if repos > 0 { s.visual = .ring(fine: max(repos - unsaved.count, 0), attention: unsaved.count) }
         for (doc, _) in failing { s.rows.append(Row(name: doc.title, value: "build failed", attention: true)) }
         if input.github.refreshedAt == nil { s.unavailable = "Not refreshed yet: right-click GitHub in the sidebar." }
         return s
@@ -81,6 +105,7 @@ struct CategoryStatus: Equatable {
         s.parts = [Part(text: "\(online) online"), count(offline.count, "offline", "offline", attention: true)]
         if offline.isEmpty { s.parts[1] = Part(text: "none offline") }
         s.rows = offline.map { Row(name: $0.name, value: "offline") }
+        if !machines.isEmpty { s.visual = .segments(machines.map(\.online).sorted { $0 && !$1 }) }
         return s
     }
 
@@ -94,11 +119,12 @@ struct CategoryStatus: Equatable {
                    count(health.attention.count, "needs attention", "need attention", attention: true)]
         if health.attention.isEmpty { s.parts[1] = Part(text: "none need attention") }
         s.rows = health.attention.map { Row(name: $0, value: "needs attention", attention: true) }
+        if health.total > 0 { s.visual = .ring(fine: health.fine, attention: health.attention.count) }
         return s
     }
 
     /// Accounts (`renews:`) and Domains (`expires:`): dates written on the pages, nearest first.
-    static func dated(_ input: Inputs, key: String, window: Int, noun: (String, String), soon: String) -> CategoryStatus {
+    static func dated(_ input: Inputs, key: String, window: Int, span: Int, end: String, noun: (String, String), soon: String) -> CategoryStatus {
         var s = CategoryStatus()
         let dated: [(OpsDocument, Date)] = input.docs.compactMap { doc in
             GitHubMatcher.property(doc, key).flatMap { Self.next($0, after: input.now) }.map { (doc, $0) }
@@ -115,6 +141,11 @@ struct CategoryStatus: Equatable {
             let passed = date < Calendar.current.startOfDay(for: input.now)
             return Row(name: doc.title, value: (passed ? "passed " : "") + Self.dayFormatter.string(from: date), attention: date <= limit)
         }
+        let points = dated.compactMap { doc, date -> DatePoint? in
+            let days = max(date.timeIntervalSince(input.now) / 86_400, 0)
+            return days <= Double(span) ? DatePoint(name: doc.title, days: days, attention: date <= limit) : nil
+        }
+        if !points.isEmpty { s.visual = .dates(points, span: span, window: window, end: end) }
         return s
     }
 

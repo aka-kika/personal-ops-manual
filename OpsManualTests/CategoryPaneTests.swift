@@ -54,6 +54,28 @@ final class CategoryStatusTests: XCTestCase {
         XCTAssertEqual(CategoryStatus.compute(title: "Machines", input([])).unavailable, "Tailscale couldn't be checked.")
     }
 
+    func testVisualsRingSegmentsAndDates() {
+        var facts = LiveFacts()
+        facts.machines = [.init(name: "alien", online: false, isSelf: false), .init(name: "mbp", online: true, isSelf: true)]
+        facts.mcp = .init(fine: 38, total: 40, attention: ["a", "b"])
+        XCTAssertEqual(CategoryStatus.compute(title: "Machines", input([], facts: facts)).visual, .segments([true, false]))
+        XCTAssertEqual(CategoryStatus.compute(title: "MCP", input([], facts: facts)).visual, .ring(fine: 38, attention: 2))
+        // Dates: inside the span only, peach inside the window; none when nothing is dated.
+        let docs = [doc("Cursor account", "Accounts", props: [DocProperty(key: "renews", value: "2026-11-14")]),
+                    doc("Far account", "Accounts", props: [DocProperty(key: "renews", value: "2027-06-01")]),
+                    doc("Soon-ish account", "Accounts", props: [DocProperty(key: "renews", value: "2026-12-26")])]
+        guard case .dates(let points, let span, let window, let end)? = CategoryStatus.compute(title: "Accounts", input(docs)).visual else {
+            return XCTFail("Accounts should have a date line")
+        }
+        XCTAssertEqual(points.map(\.name), ["Cursor account", "Soon-ish account"])
+        XCTAssertEqual(points.map(\.attention), [true, false])
+        XCTAssertEqual(points[0].days, 8, accuracy: 0.01)
+        XCTAssertEqual([span, window], [90, 30])
+        XCTAssertEqual(end, "in 90 days")
+        XCTAssertNil(CategoryStatus.compute(title: "Accounts", input([])).visual)
+        XCTAssertNil(CategoryStatus.compute(title: "MCP", input([])).visual)
+    }
+
     func testRenewalsNearestFirstAndMonthlyDays() {
         let docs = [doc("Apple Developer account", "Accounts", props: [DocProperty(key: "renews", value: "2027-02-27")]),
                     doc("xAI account", "Accounts", props: [DocProperty(key: "renews", value: "day 9")]),
