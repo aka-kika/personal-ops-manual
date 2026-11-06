@@ -18,13 +18,7 @@ struct DriftListView: View {
     var body: some View {
         VStack(spacing: 0) {
             ColumnHeader {
-                if drift.isChecking {
-                    ProgressView().controlSize(.small).frame(width: OpsChrome.chromeButtonSize, height: OpsChrome.chromeButtonSize)
-                } else {
-                    HeaderChromeButton(systemImage: "arrow.clockwise", help: "Check now") {
-                        Task { await drift.check(DriftMonitor.pages(from: store.documents)) }
-                    }
-                }
+                EmptyView()
             } title: {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Drift").font(OpsTheme.titleFont).lineLimit(1)
@@ -39,6 +33,11 @@ struct DriftListView: View {
                         ForEach(drift.driftedPages) { page in
                             DriftPageRow(page: page, selected: state.driftPageID == page.id)
                                 .onTapGesture { state.driftPageID = page.id }
+                                .contextMenu {
+                                    if store.document(id: page.id) != nil {
+                                        Button("Open Page") { state.open(docID: page.id, in: store) }
+                                    }
+                                }
                         }
                     }
                     .padding(.horizontal, 6)
@@ -47,28 +46,8 @@ struct DriftListView: View {
                 }
                 .hidesTopScrollEdgeEffect()
             }
-            Spacer(minLength: 0)
-            footer
         }
         .background(OpsTheme.canvas)
-    }
-
-    private var footer: some View {
-        VStack(spacing: 0) {
-            Rectangle().fill(OpsTheme.separator).frame(height: 1)
-            Text(footerText)
-                .font(OpsTheme.metaFont).foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
-        }
-    }
-
-    private var footerText: String {
-        guard let last = drift.lastChecked else { return "Not checked yet" }
-        let checks = drift.results.count
-        let pages = drift.checkedPageCount
-        return "Checked \(ListDate.format(last)) · \(checks) \(checks == 1 ? "check" : "checks") on \(pages) \(pages == 1 ? "page" : "pages")"
     }
 }
 

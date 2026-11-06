@@ -16,6 +16,24 @@ struct DriftDetailView: View {
     }
 }
 
+/// Drift's one rescan, in the window's top-right corner (Kika, 2026-11-06: "move it
+/// to the right corner of the main window, not in the list column"). Also Cmd-R
+/// and right-click on the Drift row.
+struct DriftRescanButton: View {
+    let store: DocumentStore
+    var drift: DriftMonitor
+
+    var body: some View {
+        if drift.isChecking {
+            ProgressView().controlSize(.small).frame(width: OpsChrome.chromeButtonSize, height: OpsChrome.chromeButtonSize)
+        } else {
+            HeaderChromeButton(systemImage: "arrow.clockwise", help: "Check Now (⌘R)") {
+                Task { await drift.check(DriftMonitor.pages(from: store.documents)) }
+            }
+        }
+    }
+}
+
 // MARK: - Overview: the score and what drags it down
 //
 // The score card and the "what drags it down" list follow the Health page of Cortex
@@ -30,7 +48,7 @@ struct DriftOverviewView: View {
     var body: some View {
         VStack(spacing: 0) {
             ColumnHeader {
-                EmptyView()
+                DriftRescanButton(store: store, drift: drift)
             } title: {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Drift").font(OpsTheme.titleFont).lineLimit(1)
@@ -242,16 +260,7 @@ struct DriftPageView: View {
         let title = doc?.title ?? results.first?.pageTitle ?? ""
         VStack(spacing: 0) {
             ColumnHeader {
-                if doc != nil {
-                    HeaderChromeButton(systemImage: "doc.text", help: "Open Page") { state.open(docID: pageID, in: store) }
-                }
-                if drift.isChecking {
-                    ProgressView().controlSize(.small).frame(width: OpsChrome.chromeButtonSize, height: OpsChrome.chromeButtonSize)
-                } else {
-                    HeaderChromeButton(systemImage: "arrow.clockwise", help: "Check Again") {
-                        Task { await drift.check(DriftMonitor.pages(from: store.documents)) }
-                    }
-                }
+                DriftRescanButton(store: store, drift: drift)
             } title: {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(title).font(OpsTheme.titleFont).lineLimit(1)

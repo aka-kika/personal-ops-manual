@@ -14,8 +14,8 @@ settings:
     SWIFT_VERSION: "6.0"
     MACOSX_DEPLOYMENT_TARGET: "26.0"
     PRODUCT_NAME: Personal Ops Manual
-    MARKETING_VERSION: "2.4.1"
-    CURRENT_PROJECT_VERSION: "13"
+    MARKETING_VERSION: "2.4.2"
+    CURRENT_PROJECT_VERSION: "14"
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: "-"
     ENABLE_HARDENED_RUNTIME: NO
@@ -52,8 +52,8 @@ targets:
       properties:
         CFBundleName: Personal Ops Manual
         CFBundleDisplayName: Personal Ops Manual
-        CFBundleShortVersionString: "2.4.1"
-        CFBundleVersion: "13"
+        CFBundleShortVersionString: "2.4.2"
+        CFBundleVersion: "14"
         LSMinimumSystemVersion: "26.0"
         NSHighResolutionCapable: true
         NSPrincipalClass: NSApplication

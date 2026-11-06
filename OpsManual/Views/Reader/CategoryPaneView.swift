@@ -46,6 +46,12 @@ struct CategoryPaneView: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
+                        .contentShape(Rectangle())
+                        .contextMenu {
+                            Button("Open Overview Page") { state.selectedDocID = overview.id }
+                            Divider()
+                            PageContextMenu(doc: overview, store: store)
+                        }
                     }
                     if !status.isEmpty {
                         section(status.label) {

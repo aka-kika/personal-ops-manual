@@ -52,6 +52,10 @@ struct SidebarView: View {
                     navRow(.drift, label: "Drift", font: OpsTheme.rowFont, icon: .symbol("gauge.with.dots.needle.67percent"),
                            count: drift.driftedPages.isEmpty ? nil : drift.driftedPages.count)
                         .help("Pages whose claims no longer match this Mac")
+                        .contextMenu {
+                            Button("Check Now") { Task { await drift.check(DriftMonitor.pages(from: store.documents)) } }
+                                .disabled(drift.isChecking)
+                        }
                     sectionHeader
                     ForEach(rows) { row in
                         switch row {

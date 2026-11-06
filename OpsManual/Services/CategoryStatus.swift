@@ -63,9 +63,9 @@ struct CategoryStatus: Equatable {
             var bits: [String] = []
             if local.uncommitted > 0 { bits.append("\(local.uncommitted) uncommitted") }
             if local.ahead > 0 { bits.append("\(local.ahead) unpushed") }
-            s.rows.append(Row(name: GitHubMatcher.displayTitle(doc.title), value: bits.joined(separator: " · "), attention: true))
+            s.rows.append(Row(name: doc.title, value: bits.joined(separator: " · "), attention: true))
         }
-        for (doc, _) in failing { s.rows.append(Row(name: GitHubMatcher.displayTitle(doc.title), value: "build failed", attention: true)) }
+        for (doc, _) in failing { s.rows.append(Row(name: doc.title, value: "build failed", attention: true)) }
         if input.github.refreshedAt == nil { s.unavailable = "Not refreshed yet: right-click GitHub in the sidebar." }
         return s
     }
@@ -164,7 +164,7 @@ struct CategoryStatus: Equatable {
     /// "Recall daemon, 6 Nov · Feed, 6 Nov · aka LAN sidecar, 5 Nov".
     static func lastChanged(_ docs: [OpsDocument]) -> String {
         docs.sorted { $0.updatedDate > $1.updatedDate }.prefix(3)
-            .map { "\(GitHubMatcher.displayTitle($0.title)), \(Self.shortDay.string(from: $0.updatedDate))" }
+            .map { "\($0.title), \(Self.shortDay.string(from: $0.updatedDate))" }
             .joined(separator: " · ")
     }
 

@@ -5,6 +5,7 @@ import AppKit
 struct OpsCommands: Commands {
     @Bindable var state: AppState
     let store: DocumentStore
+    var drift: DriftMonitor
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {}
@@ -20,7 +21,16 @@ struct OpsCommands: Commands {
             .disabled(state.selectedDocID == nil)
             Divider()
             Button("Search") { state.isSearchPresented = true }.keyboardShortcut("k", modifiers: .command)
-            Button("Refresh") { store.load() }.keyboardShortcut("r", modifiers: .command)
+            // In Drift, Cmd-R checks again; everywhere else it reloads the pages.
+            if state.selection == .drift {
+                Button("Check Drift Now") {
+                    Task { await drift.check(DriftMonitor.pages(from: store.documents)) }
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(drift.isChecking)
+            } else {
+                Button("Refresh") { store.load() }.keyboardShortcut("r", modifiers: .command)
+            }
         }
         CommandGroup(after: .help) {
             Button("What's New in Personal Ops Manual") {

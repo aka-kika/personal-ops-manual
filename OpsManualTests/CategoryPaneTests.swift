@@ -80,7 +80,7 @@ final class CategoryStatusTests: XCTestCase {
     }
 
     func testLastChangedIsTheThreeNewest() {
-        let docs = [doc("A", "X", updated: "2026-11-01T00:00:00.000Z"), doc("B (release)", "X", updated: "2026-11-06T00:00:00.000Z"),
+        let docs = [doc("A", "X", updated: "2026-11-01T00:00:00.000Z"), doc("B", "X", updated: "2026-11-06T00:00:00.000Z"),
                     doc("C", "X", updated: "2026-11-03T00:00:00.000Z"), doc("D", "X", updated: "2026-10-01T00:00:00.000Z")]
         XCTAssertEqual(CategoryStatus.lastChanged(docs), "B, 6 Nov · C, 3 Nov · A, 1 Nov")
     }

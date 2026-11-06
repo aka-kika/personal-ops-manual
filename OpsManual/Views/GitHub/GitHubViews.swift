@@ -1,86 +1,21 @@
 import SwiftUI
 import AppKit
 
-// MARK: - Shared list pieces (GitHub and MCP)
-
-/// A small grouped list: section label with a count, then calm one-line rows.
-struct GroupedSection: View {
-    let title: String
-    let count: Int
-    var body: some View {
-        HStack {
-            Text(title).font(OpsTheme.sectionLabelFont).tracking(0.5).foregroundStyle(.secondary)
-            Spacer()
-            Text("\(count)").font(OpsTheme.metaFont).foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, 10)
-        .padding(.top, 12)
-        .padding(.bottom, 4)
-    }
-}
-
-struct OneLineRow: View {
-    /// nil: no mark (third-party MCP rows stay unmarked).
-    let symbol: String?
-    let title: String
-    var dot = false
-    let selected: Bool
-    var body: some View {
-        HStack(spacing: 8) {
-            if let symbol {
-                Image(systemName: symbol).font(.system(size: 11)).foregroundStyle(.tertiary).frame(width: 14)
-            } else {
-                Color.clear.frame(width: 14, height: 1)
-            }
-            Text(title).font(OpsTheme.rowFont).lineLimit(1)
-            if dot {
-                Circle().fill(OpsTheme.peachMark).frame(width: 6, height: 6)
-                    .help("Work not saved yet")
-                    .accessibilityLabel("Work not saved yet")
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10)
-        .frame(height: 28)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(selected ? OpsTheme.selection : .clear))
-        .contentShape(Rectangle())
-    }
-}
-
 // MARK: - GitHub list
 
-/// The GitHub category: repos grouped Private then Public, names without "(release)",
-/// one quiet dot when something is not saved yet. Numbers live on the repo page.
+/// The GitHub category: one A-Z list in the look of every list (Kika, 2026-11-06:
+/// "alphabetically, not groups. the icon is enough"). The lock or globe tells
+/// private from public; one quiet dot when something is not saved yet.
 struct GitHubListView: View {
     @Bindable var store: DocumentStore
     @Bindable var state: AppState
     var github: GitHubMonitor
 
-    private struct Groups {
-        var priv: [OpsDocument] = []
-        var pub: [OpsDocument] = []
-        var other: [OpsDocument] = []
-    }
-
-    private func groups() -> Groups {
-        var g = Groups()
-        let docs = state.visibleDocuments(in: store)
-            .sorted { GitHubMatcher.displayTitle($0.title).localizedCaseInsensitiveCompare(GitHubMatcher.displayTitle($1.title)) == .orderedAscending }
-        for doc in docs {
-            switch github.info(for: doc).remote?.visibility {
-            case .private?, .internal?: g.priv.append(doc)
-            case .public?: g.pub.append(doc)
-            case nil: g.other.append(doc)
-            }
-        }
-        return g
-    }
-
     var body: some View {
-        let g = groups()
-        let repos = g.priv.count + g.pub.count
-        let unsaved = (g.priv + g.pub + g.other).filter { github.hasUnsavedWork($0) }.count
+        let docs = state.visibleDocuments(in: store)
+            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        let repos = docs.filter { github.info(for: $0).remote != nil }.count
+        let unsaved = docs.filter { github.hasUnsavedWork($0) }.count
         VStack(spacing: 0) {
             ColumnHeader {
                 if github.isRefreshing {
@@ -89,60 +24,42 @@ struct GitHubListView: View {
             } title: {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("GitHub").font(OpsTheme.titleFont).lineLimit(1)
-                    Text(subtitle(pages: g.priv.count + g.pub.count + g.other.count, repos: repos, unsaved: unsaved)).font(OpsTheme.subtitleFont).foregroundStyle(.secondary).lineLimit(1)
+                    Text(subtitle(pages: docs.count, repos: repos, unsaved: unsaved)).font(OpsTheme.subtitleFont).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 1) {
-                    section("PRIVATE", g.priv, symbol: "lock")
-                    section("PUBLIC", g.pub, symbol: "globe")
-                    section("OTHER PAGES", g.other, symbol: "doc.text")
+            if docs.isEmpty {
+                EmptyState(text: "No documents")
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 1) {
+                        ForEach(docs, id: \.filePath) { doc in
+                            DocumentRow(doc: doc, excerpt: store.excerpt(for: doc), selected: state.selectedDocID == doc.id,
+                                        symbol: symbol(for: doc), dot: github.hasUnsavedWork(doc))
+                                .onTapGesture { state.selectedDocID = doc.id }
+                                .contextMenu { PageContextMenu(doc: doc, store: store) }
+                        }
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.top, 10)
+                    .padding(.bottom, 12)
                 }
-                .padding(.horizontal, 6)
-                .padding(.bottom, 12)
+                .hidesTopScrollEdgeEffect()
             }
-            .hidesTopScrollEdgeEffect()
-            Spacer(minLength: 0)
-            OverviewFooter(title: GitHubMatcher.category, store: store, state: state)
-            footer
         }
         .background(OpsTheme.canvas)
+    }
+
+    private func symbol(for doc: OpsDocument) -> String {
+        switch github.info(for: doc).remote?.visibility {
+        case .private?, .internal?: "lock"
+        case .public?: "globe"
+        case nil: "doc.text"
+        }
     }
 
     private func subtitle(pages: Int, repos: Int, unsaved: Int) -> String {
         var text = (pages == 1 ? "1 page" : "\(pages) pages") + " · " + (repos == 1 ? "1 repo" : "\(repos) repos")
         if unsaved > 0 { text += " · \(unsaved) \(unsaved == 1 ? "has" : "have") work not saved" }
-        return text
-    }
-
-    @ViewBuilder
-    private func section(_ title: String, _ docs: [OpsDocument], symbol: String) -> some View {
-        if !docs.isEmpty {
-            GroupedSection(title: title, count: docs.count)
-            ForEach(docs) { doc in
-                OneLineRow(symbol: symbol, title: GitHubMatcher.displayTitle(doc.title), dot: github.hasUnsavedWork(doc),
-                           selected: state.selectedDocID == doc.id)
-                    .onTapGesture { state.selectedDocID = doc.id }
-                    .contextMenu { PageContextMenu(doc: doc, store: store) }
-            }
-        }
-    }
-
-    private var footer: some View {
-        VStack(spacing: 0) {
-            Rectangle().fill(OpsTheme.separator).frame(height: 1)
-            Text(footerText)
-                .font(OpsTheme.metaFont).foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
-        }
-    }
-
-    private var footerText: String {
-        guard let at = github.snapshot.refreshedAt else { return "Not refreshed yet · right-click GitHub to refresh" }
-        var text = "Refreshed \(ListDate.format(at)) · by gh and local git"
-        if let error = github.snapshot.remoteError { text = "Refreshed \(ListDate.format(at)) · GitHub: \(error)" }
         return text
     }
 }
@@ -310,15 +227,14 @@ struct RepoFactRow: View {
 
 // MARK: - MCP in one row
 
-/// "MCP (mine)" and "MCP (third-party)" as one list, grouped, a small mark on her own servers.
+/// "MCP (mine)" and "MCP (third-party)" as one A-Z list in the look of every list;
+/// the small person mark shows her own servers.
 struct MCPListView: View {
     @Bindable var store: DocumentStore
     @Bindable var state: AppState
 
     var body: some View {
         let docs = state.visibleDocuments(in: store).sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-        let mine = docs.filter { $0.category == MCPGroups.mine }
-        let others = docs.filter { $0.category != MCPGroups.mine }
         VStack(spacing: 0) {
             ColumnHeader {
                 EmptyView()
@@ -328,61 +244,27 @@ struct MCPListView: View {
                     Text(docs.count == 1 ? "1 server" : "\(docs.count) servers").font(OpsTheme.subtitleFont).foregroundStyle(.secondary)
                 }
             }
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 1) {
-                    if !mine.isEmpty {
-                        GroupedSection(title: "MINE", count: mine.count)
-                        ForEach(mine) { row($0, symbol: "person.crop.circle") }
-                            .help("Mine")
+            if docs.isEmpty {
+                EmptyState(text: "No documents")
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 1) {
+                        ForEach(docs, id: \.filePath) { doc in
+                            let mine = doc.category == MCPGroups.mine
+                            DocumentRow(doc: doc, excerpt: store.excerpt(for: doc), selected: state.selectedDocID == doc.id,
+                                        symbol: mine ? "person.crop.circle" : nil, reservesSymbol: true)
+                                .help(mine ? "Mine" : "")
+                                .onTapGesture { state.selectedDocID = doc.id }
+                                .contextMenu { PageContextMenu(doc: doc, store: store) }
+                        }
                     }
-                    if !others.isEmpty {
-                        GroupedSection(title: "THIRD-PARTY", count: others.count)
-                        ForEach(others) { row($0, symbol: nil) }
-                    }
+                    .padding(.horizontal, 6)
+                    .padding(.top, 10)
+                    .padding(.bottom, 12)
                 }
-                .padding(.horizontal, 6)
-                .padding(.bottom, 12)
+                .hidesTopScrollEdgeEffect()
             }
-            .hidesTopScrollEdgeEffect()
-            Spacer(minLength: 0)
-            OverviewFooter(title: "MCP", store: store, state: state)
         }
         .background(OpsTheme.canvas)
-    }
-
-    private func row(_ doc: OpsDocument, symbol: String?) -> some View {
-        OneLineRow(symbol: symbol, title: doc.title, selected: state.selectedDocID == doc.id)
-            .onTapGesture { state.selectedDocID = doc.id }
-            .contextMenu { PageContextMenu(doc: doc, store: store) }
-    }
-}
-
-// MARK: - Overview footer
-
-/// The list column's footer line for a category's overview page ("Overview: Machines overview").
-struct OverviewFooter: View {
-    let title: String
-    @Bindable var store: DocumentStore
-    @Bindable var state: AppState
-
-    var body: some View {
-        if let page = CategoryOverviewPage.page(for: title, in: store.activeDocuments) {
-            VStack(spacing: 0) {
-                Rectangle().fill(OpsTheme.separator).frame(height: 1)
-                Button {
-                    state.selectedDocID = page.id
-                } label: {
-                    Text("Overview: \(page.title)")
-                        .font(OpsTheme.metaFont)
-                        .foregroundStyle(state.selectedDocID == page.id ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 9)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .contextMenu { PageContextMenu(doc: page, store: store) }
-            }
-        }
     }
 }

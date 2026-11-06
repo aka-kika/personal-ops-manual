@@ -5,14 +5,6 @@ import Foundation
 enum GitHubMatcher {
     static let category = "GitHub"
 
-    /// "Personal Ops Manual (release)" shows as "Personal Ops Manual".
-    static func displayTitle(_ title: String) -> String {
-        for suffix in [" (release)", " (Release)"] where title.hasSuffix(suffix) {
-            return String(title.dropLast(suffix.count))
-        }
-        return title
-    }
-
     static func property(_ doc: OpsDocument, _ key: String) -> String? {
         doc.properties.first { $0.key == key }?.value.trimmingCharacters(in: .whitespaces).nilIfEmpty
     }
@@ -22,7 +14,7 @@ enum GitHubMatcher {
     static func repoKey(for doc: OpsDocument, known: [String: RemoteRepo], login: String?) -> String? {
         if let repo = property(doc, "repo"), GitHubProbe.isRepoName(repo) { return repo.lowercased() }
         if let source = sourceRepo(in: doc.body) { return source.lowercased() }
-        let title = displayTitle(doc.title).lowercased()
+        let title = doc.title.lowercased()
         let candidates = [title.replacingOccurrences(of: " ", with: "-"), title.replacingOccurrences(of: " ", with: "")]
         let byName = known.values.filter { repo in
             let name = repo.name.lowercased()

@@ -128,17 +128,15 @@ final class GitHubMatcherTests: XCTestCase {
         "aka-kika/akakika-socials": remote("aka-kika/akakika-socials"),
     ]
 
-    func testNamesWithoutReleaseAndHowAPageNamesItsRepo() {
-        XCTAssertEqual(GitHubMatcher.displayTitle("Personal Ops Manual (release)"), "Personal Ops Manual")
-        XCTAssertEqual(GitHubMatcher.displayTitle("GitHub index"), "GitHub index")
+    func testHowAPageNamesItsRepo() {
         // repo: line first.
-        XCTAssertEqual(GitHubMatcher.repoKey(for: page("Feed (release)", properties: [DocProperty(key: "repo", value: "aka-kika/feed-mac")]),
+        XCTAssertEqual(GitHubMatcher.repoKey(for: page("Feed Mac", properties: [DocProperty(key: "repo", value: "aka-kika/feed-mac")]),
                                              known: known, login: "aka-kika"), "aka-kika/feed-mac")
         // Then the Source: link.
-        let feed = page("Feed (release)", body: "- Source: [aka-kika/feed-mac](https://github.com/aka-kika/feed-mac)")
+        let feed = page("Feed Mac", body: "- Source: [aka-kika/feed-mac](https://github.com/aka-kika/feed-mac)")
         XCTAssertEqual(GitHubMatcher.repoKey(for: feed, known: known, login: "aka-kika"), "aka-kika/feed-mac")
         // Then the title, spaces as dashes.
-        XCTAssertEqual(GitHubMatcher.repoKey(for: page("Akakika Socials (release)"), known: known, login: "aka-kika"), "aka-kika/akakika-socials")
+        XCTAssertEqual(GitHubMatcher.repoKey(for: page("Akakika Socials"), known: known, login: "aka-kika"), "aka-kika/akakika-socials")
         XCTAssertNil(GitHubMatcher.repoKey(for: page("Homebrew taps"), known: known, login: "aka-kika"))
     }
 
@@ -149,7 +147,7 @@ final class GitHubMatcherTests: XCTestCase {
     }
 
     func testFindingsGoToDriftNotToThePage() {
-        let doc = page("Personal Ops Manual (release)", body: "- Latest release page: [v2.2.4](x)",
+        let doc = page("Personal Ops Manual", body: "- Latest release page: [v2.2.4](x)",
                        properties: [DocProperty(key: "path", value: "~/nowhere")])
         let results = GitHubMatcher.findings(for: doc, remote: known["aka-kika/personal-ops-manual"], local: .missing("~/nowhere"),
                                              remoteKnown: true, at: Date())
@@ -180,8 +178,8 @@ final class GitHubMonitorTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "ops-github-\(UUID().uuidString)"))
         let repos = [remote("aka-kika/personal-ops-manual", visibility: .public), remote("aka-kika/unrelated-private-thing")]
         let monitor = GitHubMonitor(defaults: defaults, probe: FakeGitHub(result: .success(("aka-kika", repos))))
-        let withPath = page("Personal Ops Manual (release)", properties: [DocProperty(key: "path", value: "~/x")], id: "a")
-        let noPath = page("Feed (release)", id: "b")
+        let withPath = page("Personal Ops Manual", properties: [DocProperty(key: "path", value: "~/x")], id: "a")
+        let noPath = page("Feed Mac", id: "b")
         await monitor.refresh([withPath, noPath])
         XCTAssertEqual(Array(monitor.snapshot.remote.keys), ["aka-kika/personal-ops-manual"])
         XCTAssertTrue(monitor.hasUnsavedWork(withPath))
@@ -205,7 +203,7 @@ final class PageLinksTests: XCTestCase {
     func testOneLinkByCategory() {
         let mcp = page("feed (MCP)", category: "MCP (third-party)", body: "Source: https://github.com/someone/feed-mcp and more")
         XCTAssertEqual(PageLinks.link(for: mcp), .repo(URL(string: "https://github.com/someone/feed-mcp")!))
-        let gh = page("Sift (release)", properties: [DocProperty(key: "repo", value: "aka-kika/sift")])
+        let gh = page("Sift", properties: [DocProperty(key: "repo", value: "aka-kika/sift")])
         XCTAssertEqual(PageLinks.link(for: gh), .repo(URL(string: "https://github.com/aka-kika/sift")!))
         let account = page("Vercel", category: "Accounts", properties: [DocProperty(key: "url", value: "https://vercel.com/dashboard")])
         XCTAssertEqual(PageLinks.link(for: account), .site(URL(string: "https://vercel.com/dashboard")!))

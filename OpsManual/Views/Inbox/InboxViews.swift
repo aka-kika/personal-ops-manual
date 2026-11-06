@@ -177,3 +177,19 @@ struct InboxDetailView: View {
         }
     }
 }
+
+/// A section label with a count, above the inbox's two groups.
+struct GroupedSection: View {
+    let title: String
+    let count: Int
+    var body: some View {
+        HStack {
+            Text(title).font(OpsTheme.sectionLabelFont).tracking(0.5).foregroundStyle(.secondary)
+            Spacer()
+            Text("\(count)").font(OpsTheme.metaFont).foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+    }
+}

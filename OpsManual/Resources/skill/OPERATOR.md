@@ -240,6 +240,9 @@ checks:
 Quote a name with spaces. When a version changes, update the page's text and
 its `checks:` line together. Pages with `status: parked` or `archived` are not
 checked. A GitHub page's title is the repo or app name, without "(release)".
+When that name is taken, an MCP (mine) page with the same name carries " (MCP)"
+(`mcpock (MCP)`), and a Services page keeps the plain name while the GitHub page
+takes the product or repo name (`Feed Mac`, `reed.md`).
 
 ## New page
 

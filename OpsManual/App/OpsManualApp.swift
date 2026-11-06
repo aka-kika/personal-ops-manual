@@ -25,7 +25,7 @@ struct OpsManualApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1180, height: 720)
-        .commands { OpsCommands(state: state, store: store) }
+        .commands { OpsCommands(state: state, store: store, drift: drift) }
 
         Settings {
             SettingsView(store: store)
