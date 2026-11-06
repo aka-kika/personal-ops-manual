@@ -74,6 +74,14 @@ final class DriftEvaluatorTests: XCTestCase {
         XCTAssertEqual(results[1].status, .holds)
     }
 
+    func testTrailingZerosAreTheSameVersion() {
+        XCTAssertTrue(DriftEvaluator.sameVersion("1.0", "v1.0.0"))
+        XCTAssertTrue(DriftEvaluator.sameVersion("2", "2.0"))
+        XCTAssertFalse(DriftEvaluator.sameVersion("1.0", "1.0.1"))
+        XCTAssertFalse(DriftEvaluator.sameVersion("1.10", "1.1"))
+        XCTAssertFalse(DriftEvaluator.sameVersion("1.0.0-beta", "1.0"))
+    }
+
     func testVersionsMatchWithOrWithoutV() {
         var probe = FakeProbe()
         probe.clis["gh"] = .found(path: "/opt/homebrew/bin/gh", version: "2.103.3")

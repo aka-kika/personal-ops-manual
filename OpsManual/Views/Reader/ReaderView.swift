@@ -5,6 +5,8 @@ struct ReaderView: View {
     let doc: OpsDocument
     @Bindable var store: DocumentStore
     @Bindable var state: AppState
+    /// GitHub pages show the repo card on top of their text.
+    var github: GitHubMonitor? = nil
     @AppStorage(AppSettings.showYAMLKey) private var showYAML = false
 
     /// doc-viewer.tsx: category, "Updated <date>", then the tags when there are any.
@@ -22,10 +24,9 @@ struct ReaderView: View {
     var body: some View {
         let backlinks = store.backlinks(for: doc.id)
         VStack(spacing: 0) {
+            // No corner button: Open in Default App, Copy Path and Refresh are in the right-click menu.
             ColumnHeader {
-                HeaderChromeButton(systemImage: "folder", help: "Show in Finder") {
-                    NSWorkspace.shared.activateFileViewerSelecting([store.fileURL(for: doc)])
-                }
+                EmptyView()
             } title: {
                 HStack(alignment: .top, spacing: 8) {
                     if !doc.icon.isEmpty { AgentGlyph(name: doc.icon, size: 18).padding(.top, 1) }
@@ -38,6 +39,9 @@ struct ReaderView: View {
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    if let github, doc.category == GitHubMatcher.category, RepoCard.applies(doc, github: github) {
+                        RepoCard(doc: doc, github: github)
+                    }
                     if !doc.summary.isEmpty {
                         Text(doc.summary).font(.system(size: 13)).foregroundStyle(.secondary).padding(.bottom, 16)
                     }

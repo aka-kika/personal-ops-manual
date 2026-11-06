@@ -60,11 +60,7 @@ struct CategoryOverviewView: View {
         let overview = overviewPage(docs)
         VStack(spacing: 0) {
             ColumnHeader {
-                if let overview {
-                    HeaderChromeButton(systemImage: "doc.text", help: "Open \(overview.title)") {
-                        state.selectedDocID = overview.id
-                    }
-                }
+                EmptyView()
             } title: {
                 HStack(alignment: .top, spacing: 8) {
                     categoryIcon.padding(.top, 2)

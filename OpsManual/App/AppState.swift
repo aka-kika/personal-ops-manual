@@ -15,8 +15,6 @@ final class AppState {
     var driftPageID: String?
     /// The line picked in the Inbox list.
     var inboxReportID: Int?
-    /// The repo picked in the GitHub list (its repo page, not the reader).
-    var repoPageID: String?
     /// The What's new sheet's lines while it is open.
     var whatsNew: [WhatsNew.Line]?
     var isSearchPresented = false
@@ -43,7 +41,6 @@ final class AppState {
         selectedDocID = nil
         driftPageID = nil
         inboxReportID = nil
-        repoPageID = nil
     }
 
     func visibleDocuments(in store: DocumentStore) -> [OpsDocument] {
@@ -63,7 +60,6 @@ final class AppState {
         if !visibleDocuments(in: store).contains(where: { $0.id == docID }) {
             selection = doc.isParked ? .parked : .all
         }
-        repoPageID = nil
         selectedDocID = docID
     }
 }

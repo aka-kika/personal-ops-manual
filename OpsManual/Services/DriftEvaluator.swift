@@ -152,11 +152,16 @@ enum DriftEvaluator {
         return out
     }
 
-    /// "v2.2.5" and "2.2.5" are the same version.
+    /// "v2.2.5" and "2.2.5" are the same version, and so are "1.0" and "v1.0.0".
     static func sameVersion(_ a: String, _ b: String) -> Bool {
         func clean(_ s: String) -> String {
-            let t = s.trimmingCharacters(in: .whitespaces).lowercased()
-            return t.hasPrefix("v") ? String(t.dropFirst()) : t
+            var t = s.trimmingCharacters(in: .whitespaces).lowercased()
+            if t.hasPrefix("v") { t = String(t.dropFirst()) }
+            // Only a plain dotted number loses its trailing zeros.
+            guard t.allSatisfy({ $0.isNumber || $0 == "." }) else { return t }
+            var parts = t.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+            while parts.count > 1, let last = parts.last, Int(last) == 0 { parts.removeLast() }
+            return parts.joined(separator: ".")
         }
         return clean(a) == clean(b)
     }

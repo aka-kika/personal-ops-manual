@@ -113,9 +113,7 @@ struct ContentView: View {
         } else if state.selection == .inbox && state.selectedDocID == nil {
             InboxDetailView(store: store, state: state).titleBarColumn()
         } else if let id = state.selectedDocID, let doc = store.document(id: id) {
-            ReaderView(doc: doc, store: store, state: state).titleBarColumn()
-        } else if state.isGitHub, let id = state.repoPageID, let doc = store.document(id: id) {
-            RepoPageView(doc: doc, store: store, state: state, github: github, drift: drift).titleBarColumn()
+            ReaderView(doc: doc, store: store, state: state, github: github).titleBarColumn()
         } else if state.selection == .mcp {
             CategoryOverviewView(title: "MCP", categories: MCPGroups.categories, store: store, state: state).titleBarColumn()
         } else if case .category(let name) = state.selection {

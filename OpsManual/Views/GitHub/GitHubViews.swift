@@ -89,14 +89,14 @@ struct GitHubListView: View {
             } title: {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("GitHub").font(OpsTheme.titleFont).lineLimit(1)
-                    Text(subtitle(repos: repos, unsaved: unsaved)).font(OpsTheme.subtitleFont).foregroundStyle(.secondary).lineLimit(1)
+                    Text(subtitle(pages: g.priv.count + g.pub.count + g.other.count, repos: repos, unsaved: unsaved)).font(OpsTheme.subtitleFont).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     section("PRIVATE", g.priv, symbol: "lock")
                     section("PUBLIC", g.pub, symbol: "globe")
-                    section("PAGES", g.other, symbol: "doc.text")
+                    section("OTHER PAGES", g.other, symbol: "doc.text")
                 }
                 .padding(.horizontal, 6)
                 .padding(.bottom, 12)
@@ -108,8 +108,8 @@ struct GitHubListView: View {
         .background(OpsTheme.canvas)
     }
 
-    private func subtitle(repos: Int, unsaved: Int) -> String {
-        var text = repos == 1 ? "1 repo" : "\(repos) repos"
+    private func subtitle(pages: Int, repos: Int, unsaved: Int) -> String {
+        var text = (pages == 1 ? "1 page" : "\(pages) pages") + " · " + (repos == 1 ? "1 repo" : "\(repos) repos")
         if unsaved > 0 { text += " · \(unsaved) \(unsaved == 1 ? "has" : "have") work not saved" }
         return text
     }
@@ -119,18 +119,9 @@ struct GitHubListView: View {
         if !docs.isEmpty {
             GroupedSection(title: title, count: docs.count)
             ForEach(docs) { doc in
-                let isRepo = github.info(for: doc).remote != nil || github.snapshot.local[doc.id] != nil
                 OneLineRow(symbol: symbol, title: GitHubMatcher.displayTitle(doc.title), dot: github.hasUnsavedWork(doc),
-                           selected: state.repoPageID == doc.id || state.selectedDocID == doc.id)
-                    .onTapGesture {
-                        if isRepo {
-                            state.selectedDocID = nil
-                            state.repoPageID = doc.id
-                        } else {
-                            state.repoPageID = nil
-                            state.selectedDocID = doc.id
-                        }
-                    }
+                           selected: state.selectedDocID == doc.id)
+                    .onTapGesture { state.selectedDocID = doc.id }
                     .contextMenu { PageContextMenu(doc: doc, store: store) }
             }
         }
@@ -155,64 +146,49 @@ struct GitHubListView: View {
     }
 }
 
-// MARK: - Repo page
+// MARK: - Repo card (on top of a GitHub page)
 
-/// One repo: what is real now. Calm: only a row that needs attention gets a mark.
-/// Mismatches with the page go to Drift (Kika, 2026-11-06), not here.
-struct RepoPageView: View {
+/// What is real now for a GitHub page's repo, shown above the page's own text
+/// (Kika, 2026-11-06: "the part we build should live together with the info").
+/// Calm: only a row that needs attention gets a mark. Mismatches go to the inbox.
+struct RepoCard: View {
     let doc: OpsDocument
-    @Bindable var store: DocumentStore
-    @Bindable var state: AppState
     var github: GitHubMonitor
-    var drift: DriftMonitor
+
+    /// Only for pages the refresh knows something about (not the index or a list page).
+    static func applies(_ doc: OpsDocument, github: GitHubMonitor) -> Bool {
+        let info = github.info(for: doc)
+        return info.remote != nil || info.local != nil
+    }
 
     var body: some View {
         let info = github.info(for: doc)
-        VStack(spacing: 0) {
-            ColumnHeader {
-                HeaderChromeButton(systemImage: "doc.text", help: "Open Page") { state.selectedDocID = doc.id }
-            } title: {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                if let remote = info.remote {
+                    Label(remote.visibility == .public ? "Public" : "Private",
+                          systemImage: remote.visibility == .public ? "globe" : "lock")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(OpsTheme.codeBackground))
+                }
+                Text(subtitle(info)).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
+            }
+            DriftCard {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 8) {
-                        Text(GitHubMatcher.displayTitle(doc.title)).font(OpsTheme.titleFont).lineLimit(1)
-                        if let remote = info.remote {
-                            Label(remote.visibility == .public ? "Public" : "Private",
-                                  systemImage: remote.visibility == .public ? "globe" : "lock")
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 1)
-                                .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(OpsTheme.codeBackground))
-                        }
-                    }
-                    Text(subtitle(info)).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
-                }
-            }
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    DriftCard {
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(Array(rows(info).enumerated()), id: \.offset) { index, row in
-                                if index > 0 { Rectangle().fill(OpsTheme.separator).frame(height: 1) }
-                                RepoFactRow(row: row)
-                            }
-                        }
-                    }
-                    if let error = github.snapshot.remoteError {
-                        DriftNote(symbol: "xmark", text: "GitHub couldn't be checked: \(error). Local git still shows.")
+                    ForEach(Array(rows(info).enumerated()), id: \.offset) { index, row in
+                        if index > 0 { Rectangle().fill(OpsTheme.separator).frame(height: 1) }
+                        RepoFactRow(row: row)
                     }
                 }
-                .frame(maxWidth: 640, alignment: .leading)
-                .padding(.horizontal, OpsChrome.columnHeaderHorizontalPadding)
-                .padding(.top, 14)
-                .padding(.bottom, 32)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .hidesTopScrollEdgeEffect()
-            .id(doc.id)
+            if let error = github.snapshot.remoteError {
+                DriftNote(symbol: "xmark", text: "GitHub couldn't be checked: \(error). Local git still shows.")
+            }
         }
-        .background(OpsTheme.canvas)
-        .contextMenu { PageContextMenu(doc: doc, store: store) }
+        .padding(.bottom, 18)
     }
 
     private func subtitle(_ info: GitHubMonitor.Info) -> String {
@@ -356,8 +332,7 @@ struct RepoSummaryCard: View {
                         ForEach(Array(unsaved.enumerated()), id: \.element.id) { index, doc in
                             if index > 0 { Rectangle().fill(OpsTheme.separator).frame(height: 1) }
                             Button {
-                                state.selectedDocID = nil
-                                state.repoPageID = doc.id
+                                state.selectedDocID = doc.id
                             } label: {
                                 HStack {
                                     Image(systemName: github.info(for: doc).remote?.visibility == .public ? "globe" : "lock")

@@ -31,6 +31,8 @@ struct GitHubProbe: GitHubProbing {
         drift.cliFolders.map { "\($0)/\(name)" }.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
+    static let pageSize = 25
+
     static let repoFields = """
     nameWithOwner name visibility isArchived url
     latestRelease { tagName }
@@ -47,9 +49,11 @@ struct GitHubProbe: GitHubProbing {
         var login = ""
         var repos: [RemoteRepo] = []
         var cursor: String?
-        for _ in 0..<10 {   // 100 repos a page, 1000 at most
+        // 25 repos a request: about 3 seconds each. 100 at once took about 10 s and
+        // often hit GitHub's time limit (HTTP 502, 2026-11-06).
+        for _ in 0..<40 {   // 1000 repos at most
             let after = cursor.map { ", after: \"\($0)\"" } ?? ""
-            let query = "query { viewer { login repositories(first: 100, ownerAffiliations: OWNER\(after)) { pageInfo { hasNextPage endCursor } nodes { \(Self.repoFields) } } } }"
+            let query = "query { viewer { login repositories(first: \(Self.pageSize), ownerAffiliations: OWNER\(after)) { pageInfo { hasNextPage endCursor } nodes { \(Self.repoFields) } } } }"
             switch graphql(gh, query) {
             case .failure(let e): return .failure(e)
             case .success(let data):
@@ -74,7 +78,17 @@ struct GitHubProbe: GitHubProbing {
         return .success((login, repos))
     }
 
+    /// One retry when GitHub answers with a server error (502/503/504): those pass.
     private func graphql(_ gh: String, _ query: String) -> Result<Data, GitHubProbeError> {
+        let first = graphqlOnce(gh, query)
+        if case .failure(.failed(let why)) = first, why.contains("HTTP 5") {
+            Thread.sleep(forTimeInterval: 2)
+            return graphqlOnce(gh, query)
+        }
+        return first
+    }
+
+    private func graphqlOnce(_ gh: String, _ query: String) -> Result<Data, GitHubProbeError> {
         guard let out = ProcessRunner.run(gh, ["api", "graphql", "-f", "query=\(query)"], timeout: timeout) else {
             return .failure(.failed("gh did not answer"))
         }
