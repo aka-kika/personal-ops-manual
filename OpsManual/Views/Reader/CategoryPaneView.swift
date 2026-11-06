@@ -19,7 +19,7 @@ struct CategoryPaneView: View {
     }
 
     private var overview: OpsDocument? {
-        CategoryOverviewPage.page(for: title, in: store.activeDocuments)
+        CategoryOverviewPage.page(for: title, categories: categories, in: store.activeDocuments)
     }
 
     var body: some View {
@@ -28,7 +28,9 @@ struct CategoryPaneView: View {
                                                                 github: github.snapshot, facts: live.facts))
         VStack(spacing: 0) {
             ColumnHeader {
-                EmptyView()
+                if title == AppStorePage.category && live.isFetchingAppStore {
+                    ProgressView().controlSize(.small).frame(width: OpsChrome.chromeButtonSize, height: OpsChrome.chromeButtonSize)
+                }
             } title: {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(title).font(OpsTheme.titleFont).lineLimit(1)
@@ -100,7 +102,11 @@ struct CategoryPaneView: View {
             guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
             let ids = Set(docs.map(\.id))
             let labels = drift.checkResults.filter { ids.contains($0.pageID) && $0.kind == .launchd }.map(\.subject)
-            await live.refreshIfStale(labels: labels)
+            // App Store: read App Store Connect each time the pane opens (Cmd-R reads again).
+            let appIDs = title == AppStorePage.category ? docs.compactMap(AppStorePage.appID) : []
+            async let store: Void = live.refreshAppStore(ids: appIDs)
+            async let rest: Void = live.refreshIfStale(labels: labels)
+            _ = await (store, rest)
         }
     }
 

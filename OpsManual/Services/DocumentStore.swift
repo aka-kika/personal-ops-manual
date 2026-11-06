@@ -28,6 +28,8 @@ final class DocumentStore {
     /// Open lines in the inbox.
     var inboxOpenCount: Int { inboxReports.filter { !$0.handled }.count }
     var openInboxReports: [InboxReport] { inboxReports.filter { !$0.handled } }
+    /// The inbox file's text without its frontmatter, shown as a page when no line is picked.
+    private(set) var inboxMarkdown = ""
     @ObservationIgnored private var inboxWatcher: FolderWatcher?
     @ObservationIgnored private var watcher: FolderWatcher?
     @ObservationIgnored private let shouldWatch: Bool
@@ -96,6 +98,7 @@ final class DocumentStore {
             }
             loadError = nil
             inboxReports = readInbox()
+            inboxMarkdown = (try? String(contentsOf: inboxFileURL, encoding: .utf8)).map { FrontmatterCodec.parse($0).body } ?? ""
             if shouldWatch, inboxWatcher?.isActive != true {
                 let inboxDir = folder.appendingPathComponent(Self.inboxFolderName)
                 if FileManager.default.fileExists(atPath: inboxDir.path) {

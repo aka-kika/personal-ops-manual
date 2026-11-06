@@ -244,3 +244,15 @@ final class InboxSectionsTests: XCTestCase {
         XCTAssertEqual(InboxSync.sections(checks: [], repo: [path, release], githubRead: true).github?.count, 1)
     }
 }
+
+final class RepoCardBuildRowTests: XCTestCase {
+    func testNoBuildRowWithoutGitHubActions() {
+        var repo = remote("aka-kika/iconzzz")
+        repo.ci = .none
+        XCTAssertNil(RepoCard.buildRow(repo))
+        repo.ci = .success
+        XCTAssertEqual(RepoCard.buildRow(repo)?.status, .ok)
+        repo.ci = .failure
+        XCTAssertEqual(RepoCard.buildRow(repo)?.value, "failed")
+    }
+}

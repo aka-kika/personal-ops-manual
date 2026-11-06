@@ -117,5 +117,79 @@ final class OverviewPageTests: XCTestCase {
         let intro = CategoryOverviewPage.intro(machines)
         XCTAssertEqual(intro.text, "The computers I own.")
         XCTAssertEqual(intro.notHere, "Not here: the apps on them.")
+        let linked = doc("Skills overview", "Skills", body: "Agents reach it through [[skill-librarian]].\n\nNot here: the collection ([[Skill collection|the shelf]]).")
+        XCTAssertEqual(CategoryOverviewPage.intro(linked).text, "Agents reach it through skill-librarian.")
+        XCTAssertEqual(CategoryOverviewPage.intro(linked).notHere, "Not here: the collection (the shelf).")
+    }
+}
+
+final class AppStoreStatusTests: XCTestCase {
+    private let now = CategoryStatus.isoDay.date(from: "2026-11-06")!
+
+    private func app(_ title: String, summary: String) -> OpsDocument {
+        OpsDocument(id: title, title: title, category: "App Store", summary: summary, tags: [], createdAt: "2026-10-16T00:00:00.000Z",
+                    updatedAt: "2026-10-16T00:00:00.000Z", properties: [DocProperty(key: "status", value: "active")], body: "")
+    }
+
+    func testParsesAscStatus() throws {
+        let json = """
+        {"app":{"id":"6818254619"},"appstore":{"version":"1.0","state":"WAITING_FOR_REVIEW","createdDate":"2026-10-01T10:13:07-07:00"},
+         "review":{"state":"WAITING_FOR_REVIEW","submittedDate":"2026-10-26T15:03:20.15Z"}}
+        """
+        let state = try XCTUnwrap(AppStoreState.parse(Data(json.utf8)))
+        XCTAssertEqual(state.phase, .waiting)
+        XCTAssertEqual(state.version, "1.0")
+        XCTAssertNotNil(state.submittedAt)
+        XCTAssertNil(AppStoreState.parse(Data("{}".utf8)))
+    }
+
+    func testAppIDAndPriceFromThePage() {
+        let page = app("Static QR (App Store)", summary: "iPhone app, $4.99, 1.0 build 3 waiting for review since 2026-10-26 (app 6818254619)")
+        XCTAssertEqual(AppStorePage.appID(page), "6818254619")
+        XCTAssertEqual(AppStorePage.price(page), "$4.99")
+        XCTAssertEqual(AppStorePage.name(page), "Static QR")
+        XCTAssertNil(AppStorePage.appID(app("App Store index", summary: "Every app")))
+    }
+
+    func testPeachOnlyForRejectedOrALongWait() {
+        let docs = [app("Static QR (App Store)", summary: "$4.99 (app 1)"), app("Background Off (App Store)", summary: "$1.99 (app 2)"),
+                    app("Lane (App Store)", summary: "free (app 3)"), app("App Store index", summary: "Every app")]
+        var facts = LiveFacts()
+        let day: TimeInterval = 86_400
+        facts.appStore = ["1": .init(state: "WAITING_FOR_REVIEW", version: "1.0", submittedAt: now.addingTimeInterval(-11 * day)),
+                          "2": .init(state: "READY_FOR_DISTRIBUTION", version: "1.0.3", submittedAt: nil)]
+        facts.appStoreFailed = ["3"]
+        facts.appStoreAt = now
+        var s = CategoryStatus.compute(title: "App Store", .init(docs: docs, checkResults: [], github: GitHubSnapshot(), facts: facts, now: now))
+        XCTAssertEqual(s.rows.map(\.name), ["Background Off", "Lane", "Static QR"])
+        XCTAssertEqual(s.rows.map(\.value), ["on sale · 1.0.3 · $1.99", "couldn't check", "waiting for review, 11 days · 1.0 · $4.99"])
+        XCTAssertEqual(s.rows.map(\.attention), [false, false, false])
+        XCTAssertEqual(s.parts.map(\.text), ["1 on sale", "1 in review", "none rejected"])
+
+        facts.appStore?["1"]?.submittedAt = now.addingTimeInterval(-20 * day)
+        facts.appStore?["3"] = .init(state: "REJECTED", version: "1.1", submittedAt: now.addingTimeInterval(-2 * day))
+        facts.appStoreFailed = []
+        s = CategoryStatus.compute(title: "App Store", .init(docs: docs, checkResults: [], github: GitHubSnapshot(), facts: facts, now: now))
+        XCTAssertEqual(s.rows.map(\.attention), [false, true, true])
+        XCTAssertEqual(s.rows[1].value, "rejected, 2 days · 1.1 · free")
+        XCTAssertEqual(s.parts.map(\.attention), [false, true, true])
+        XCTAssertEqual(s.visual, .ring(fine: 1, attention: 2))
+        XCTAssertNil(s.unavailable)
+    }
+
+    func testNotReadYetSaysSo() {
+        let docs = [app("Static QR (App Store)", summary: "(app 1)")]
+        var facts = LiveFacts()
+        facts.ascMissing = true
+        let s = CategoryStatus.compute(title: "App Store", .init(docs: docs, checkResults: [], github: GitHubSnapshot(), facts: facts, now: now))
+        XCTAssertEqual(s.unavailable, "asc is not installed: App Store Connect couldn't be checked.")
+    }
+
+    func testIndexPageStandsInForAMissingOverview() {
+        var index = app("App Store index", summary: "")
+        index.tags = ["app-store", "index"]
+        let docs = [app("Static QR (App Store)", summary: ""), index]
+        XCTAssertEqual(CategoryOverviewPage.page(for: "App Store", categories: ["App Store"], in: docs)?.title, "App Store index")
+        XCTAssertFalse(CategoryOverviewPage.isOverview(index))
     }
 }

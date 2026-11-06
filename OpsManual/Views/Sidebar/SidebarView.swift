@@ -49,6 +49,13 @@ struct SidebarView: View {
                     navRow(.inbox, label: "Inbox", font: OpsTheme.rowFont, icon: .symbol("tray"),
                            count: store.inboxOpenCount > 0 ? store.inboxOpenCount : nil)
                         .help("Reports from readers, in _inbox/reports.md")
+                        .contextMenu {
+                            Button("Open in Finder") {
+                                let url = store.inboxFileURL
+                                let exists = FileManager.default.fileExists(atPath: url.path)
+                                NSWorkspace.shared.activateFileViewerSelecting([exists ? url : url.deletingLastPathComponent()])
+                            }
+                        }
                     navRow(.drift, label: "Drift", font: OpsTheme.rowFont, icon: .symbol("gauge.with.dots.needle.67percent"),
                            count: drift.driftedPages.isEmpty ? nil : drift.driftedPages.count)
                         .help("Pages whose claims no longer match this Mac")

@@ -22,6 +22,13 @@ struct LiveFacts: Sendable, Codable {
     /// Last exit code by launchd label (only labels that are loaded).
     var exitCodes: [String: Int] = [:]
     var fetchedAt: Date?
+
+    /// App Store Connect state by app id (nil until the first read).
+    var appStore: [String: AppStoreState]?
+    /// App ids whose last `asc status` gave no answer.
+    var appStoreFailed: Set<String> = []
+    var appStoreAt: Date?
+    var ascMissing = false
 }
 
 protocol LiveProbing: Sendable {
@@ -97,9 +104,53 @@ struct LiveProbe: LiveProbing {
 final class LiveStatusMonitor {
     private(set) var facts = LiveFacts()
     private(set) var isFetching = false
+    private(set) var isFetchingAppStore = false
     @ObservationIgnored private let probe: any LiveProbing
+    @ObservationIgnored private let appStoreProbe: AppStoreProbe
+    @ObservationIgnored private let defaults: UserDefaults
 
-    init(probe: any LiveProbing = LiveProbe()) { self.probe = probe }
+    init(probe: any LiveProbing = LiveProbe(), appStoreProbe: AppStoreProbe = AppStoreProbe(), defaults: UserDefaults = .standard) {
+        self.probe = probe
+        self.appStoreProbe = appStoreProbe
+        self.defaults = defaults
+        // The last App Store answer shows at once; the pane reads again when it opens.
+        if let data = defaults.data(forKey: Self.appStoreKey),
+           let saved = try? JSONDecoder().decode(SavedAppStore.self, from: data) {
+            facts.appStore = saved.states
+            facts.appStoreAt = saved.at
+        }
+    }
+
+    static let appStoreKey = "appStoreStatus"
+    private struct SavedAppStore: Codable { var states: [String: AppStoreState]; var at: Date }
+
+    /// Reads `asc status` for each app id, all at once (about 3 s each). `force` (Cmd-R)
+    /// reads again even when the last read is under a minute old.
+    func refreshAppStore(ids: [String], force: Bool = false) async {
+        guard !ids.isEmpty, !isFetchingAppStore else { return }
+        if !force, let at = facts.appStoreAt, Date().timeIntervalSince(at) < 60,
+           ids.allSatisfy({ facts.appStore?[$0] != nil || facts.appStoreFailed.contains($0) }) { return }
+        isFetchingAppStore = true
+        let probe = appStoreProbe
+        let result: (states: [String: AppStoreState], failed: Set<String>, missing: Bool) = await Task.detached(priority: .utility) {
+            guard probe.tool != nil else { return ([:], Set(ids), true) }
+            let box = AppStoreBox()
+            DispatchQueue.concurrentPerform(iterations: ids.count) { i in
+                box.put(ids[i], probe.status(appID: ids[i]))
+            }
+            return (box.states, box.failed, false)
+        }.value
+        var merged = facts.appStore ?? [:]
+        for (id, state) in result.states { merged[id] = state }
+        facts.appStore = merged
+        facts.appStoreFailed = result.failed
+        facts.ascMissing = result.missing
+        facts.appStoreAt = Date()
+        if !result.states.isEmpty, let data = try? JSONEncoder().encode(SavedAppStore(states: merged, at: Date())) {
+            defaults.set(data, forKey: Self.appStoreKey)
+        }
+        isFetchingAppStore = false
+    }
 
     /// Fetches again when the last fetch is older than a minute (the pane calls this on appear).
     func refreshIfStale(labels: [String]) async {
@@ -107,14 +158,35 @@ final class LiveStatusMonitor {
         guard !isFetching else { return }
         isFetching = true
         let probe = self.probe
-        facts = await Task.detached(priority: .utility) {
-            var f = LiveFacts()
+        let previous = facts
+        let fresh = await Task.detached(priority: .utility) {
+            var f = previous
+            f.exitCodes = [:]
             f.machines = probe.machines()
             f.mcp = probe.mcpHealth()
             for label in labels { if let code = probe.lastExit(label: label) { f.exitCodes[label] = code } }
             f.fetchedAt = Date()
             return f
         }.value
+        // Keep what the App Store read found meanwhile.
+        var kept = fresh
+        kept.appStore = facts.appStore
+        kept.appStoreFailed = facts.appStoreFailed
+        kept.appStoreAt = facts.appStoreAt
+        kept.ascMissing = facts.ascMissing
+        facts = kept
         isFetching = false
+    }
+}
+
+/// Collects the parallel `asc status` answers.
+private final class AppStoreBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var states: [String: AppStoreState] = [:]
+    private(set) var failed: Set<String> = []
+
+    func put(_ id: String, _ state: AppStoreState?) {
+        lock.lock(); defer { lock.unlock() }
+        if let state { states[id] = state } else { failed.insert(id) }
     }
 }

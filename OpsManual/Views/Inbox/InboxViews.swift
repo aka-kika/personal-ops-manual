@@ -11,15 +11,9 @@ struct InboxListView: View {
     var body: some View {
         let reports = store.openInboxReports.reversed() as [InboxReport]
         VStack(spacing: 0) {
+            // No corner button: Open in Finder is on the Inbox row's right-click in the sidebar.
             ColumnHeader {
-                HeaderChromeButton(systemImage: "folder", help: "Show the Inbox File in Finder") {
-                    let url = store.inboxFileURL
-                    if FileManager.default.fileExists(atPath: url.path) {
-                        NSWorkspace.shared.activateFileViewerSelecting([url])
-                    } else {
-                        NSWorkspace.shared.activateFileViewerSelecting([url.deletingLastPathComponent()])
-                    }
-                }
+                EmptyView()
             } title: {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Inbox").font(OpsTheme.titleFont).lineLimit(1)
@@ -99,17 +93,46 @@ struct InboxDetailView: View {
         if let id = state.inboxReportID, let report = store.openInboxReports.first(where: { $0.id == id }) {
             reportView(report)
         } else {
-            EmptyState(text: store.openInboxReports.isEmpty ? "No open reports" : "Select a report").background(OpsTheme.canvas)
+            fileView
         }
+    }
+
+    /// No line picked: the inbox file itself, rendered like a page (Kika, 2026-11-06:
+    /// "a rendered md list of the inbox md file. not too fancy"). Read only.
+    private var fileView: some View {
+        VStack(spacing: 0) {
+            ColumnHeader {
+                EmptyView()
+            } title: {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Inbox").font(OpsTheme.titleFont).lineLimit(1)
+                    Text("_inbox/reports.md").font(OpsTheme.subtitleFont).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if store.inboxMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("The inbox file is empty: no report has been filed yet.").font(OpsTheme.rowFont).foregroundStyle(.tertiary)
+                    } else {
+                        MarkdownView(markdown: store.inboxMarkdown, baseURL: store.folder)
+                    }
+                }
+                .padding(.horizontal, OpsChrome.columnHeaderHorizontalPadding)
+                .padding(.top, 14)
+                .padding(.bottom, 40)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .hidesTopScrollEdgeEffect()
+        }
+        .background(OpsTheme.canvas)
     }
 
     private func reportView(_ report: InboxReport) -> some View {
         let doc = report.malformed ? nil : store.document(forReportPage: report.page)
         return VStack(spacing: 0) {
+            // No corner icon: the "Open <page>" button below does the same.
             ColumnHeader {
-                if let doc {
-                    HeaderChromeButton(systemImage: "doc.text", help: "Open Page") { state.open(docID: doc.id, in: store) }
-                }
+                EmptyView()
             } title: {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(report.malformed ? "Typed by hand" : (doc?.title ?? report.page)).font(OpsTheme.titleFont).lineLimit(1)

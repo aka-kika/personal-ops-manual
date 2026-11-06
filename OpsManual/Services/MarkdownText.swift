@@ -23,6 +23,9 @@ enum MarkdownText {
         var t = text
         t = t.replacing(/```[\s\S]*?```/, with: "")
         t = t.replacing(/`([^`]+)`/) { String($0.output.1) }
+        // [[Page|shown]] and [[Page]]: the words only.
+        t = t.replacing(/\[\[[^\]|]+\|([^\]]+)\]\]/) { String($0.output.1) }
+        t = t.replacing(/\[\[([^\]]+)\]\]/) { String($0.output.1) }
         t = t.replacing(/(?m)^#{1,6}\s+/, with: "")
         t = t.replacing(/\*\*([^*]+)\*\*/) { String($0.output.1) }
         t = t.replacing(/\*([^*]+)\*/) { String($0.output.1) }

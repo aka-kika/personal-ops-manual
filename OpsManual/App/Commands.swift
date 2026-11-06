@@ -6,6 +6,7 @@ struct OpsCommands: Commands {
     @Bindable var state: AppState
     let store: DocumentStore
     var drift: DriftMonitor
+    var live: LiveStatusMonitor
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {}
@@ -29,7 +30,15 @@ struct OpsCommands: Commands {
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(drift.isChecking)
             } else {
-                Button("Refresh") { store.load() }.keyboardShortcut("r", modifiers: .command)
+                Button("Refresh") {
+                    store.load()
+                    // On the App Store pane, Cmd-R also reads App Store Connect again.
+                    if state.selection == .category(AppStorePage.category) {
+                        let ids = store.activeDocuments.filter { $0.category == AppStorePage.category }.compactMap(AppStorePage.appID)
+                        Task { await live.refreshAppStore(ids: ids, force: true) }
+                    }
+                }
+                .keyboardShortcut("r", modifiers: .command)
             }
         }
         CommandGroup(after: .help) {

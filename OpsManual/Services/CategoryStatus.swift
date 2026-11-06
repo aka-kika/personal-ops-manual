@@ -65,6 +65,7 @@ struct CategoryStatus: Equatable {
         case "Domains": return dated(input, key: "expires", window: 60, span: 365, end: "in a year", noun: ("expiry", "expiries"), soon: "in the next 60 days")
         case "Automations": return automations(input)
         case "Services", "Self-hosted": return upDown(input)
+        case AppStorePage.category: return appStore(input)
         default: return generic(input)
         }
     }
@@ -178,6 +179,63 @@ struct CategoryStatus: Equatable {
         return s
     }
 
+    /// App Store: each app's state in App Store Connect, how long, version, price. Peach
+    /// only for a rejection or a wait for review over 14 days.
+    static func appStore(_ input: Inputs) -> CategoryStatus {
+        var s = CategoryStatus()
+        let apps = input.docs.compactMap { doc in AppStorePage.appID(doc).map { (doc, $0) } }
+            .sorted { AppStorePage.name($0.0).localizedCaseInsensitiveCompare(AppStorePage.name($1.0)) == .orderedAscending }
+        guard !apps.isEmpty else { return generic(input) }
+        guard let states = input.facts.appStore else {
+            s.unavailable = input.facts.ascMissing ? "asc is not installed: App Store Connect couldn't be checked."
+                : input.facts.appStoreFailed.isEmpty ? "Checking App Store Connect…" : "App Store Connect couldn't be checked."
+            return s
+        }
+        var onSale = 0, review = 0, rejected = 0, longWait = false, attention = 0
+        for (doc, id) in apps {
+            guard let state = states[id] else {
+                s.rows.append(Row(name: AppStorePage.name(doc), value: "couldn't check"))
+                continue
+            }
+            // Calendar days, the way Kika counts them ("waiting since 26 Oct" is 11 days on 6 Nov).
+            let days = state.submittedAt.map { from in
+                let cal = Calendar.current
+                return max(cal.dateComponents([.day], from: cal.startOfDay(for: from), to: cal.startOfDay(for: input.now)).day ?? 0, 0)
+            }
+            let since = days.map { $0 == 0 ? "today" : $0 == 1 ? "1 day" : "\($0) days" }
+            let phrase: String
+            var care = false
+            var version = state.version
+            switch state.phase {
+            case .onSale: onSale += 1; phrase = "on sale"
+            case .waiting:
+                review += 1
+                phrase = "waiting for review" + (since.map { ", \($0)" } ?? "")
+                if (days ?? 0) > 14 { care = true; longWait = true }
+            case .inReview: review += 1; phrase = "in review" + (since.map { ", \($0)" } ?? "")
+            case .pendingRelease: phrase = "pending release"
+            case .rejected: rejected += 1; care = true; phrase = "rejected" + (since.map { ", \($0)" } ?? "")
+            case .preparing: phrase = "preparing " + (state.version ?? "a version"); version = nil
+            case .removed: phrase = "removed from sale"
+            case .other(let text): phrase = text
+            }
+            if care { attention += 1 }
+            let value = ([phrase] + [version, AppStorePage.price(doc)].compactMap { $0 }).joined(separator: " · ")
+            s.rows.append(Row(name: AppStorePage.name(doc), value: value, attention: care))
+        }
+        s.parts = [Part(text: onSale == 0 ? "none on sale" : "\(onSale) on sale"),
+                   Part(text: review == 0 ? "none in review" : "\(review) in review", attention: longWait),
+                   count(rejected, "rejected", "rejected", attention: true)]
+        if rejected == 0 { s.parts[2] = Part(text: "none rejected") }
+        s.visual = .ring(fine: apps.count - attention, attention: attention)
+        if input.facts.ascMissing {
+            s.unavailable = "asc is not installed: this is the last answer."
+        } else if !input.facts.appStoreFailed.isEmpty, let at = input.facts.appStoreAt {
+            s.unavailable = "App Store Connect couldn't be checked just now; some rows are from before \(shortDay.string(from: at))."
+        }
+        return s
+    }
+
     /// Any other category: what its checks: lines say, when it has some.
     static func generic(_ input: Inputs) -> CategoryStatus {
         var s = CategoryStatus()
@@ -253,8 +311,14 @@ enum CategoryOverviewPage {
         return MCPGroups.categories.contains(doc.category) && t == "mcp overview"
     }
 
-    static func page(for title: String, in docs: [OpsDocument]) -> OpsDocument? {
-        docs.first { $0.title.trimmingCharacters(in: .whitespaces).lowercased() == title.lowercased() + " overview" }
+    /// "<Category> overview"; without one, the category's index page (tagged `index`,
+    /// like "App Store index" or "CLI tools on this Mac"), which stays in the list.
+    static func page(for title: String, categories: Set<String> = [], in docs: [OpsDocument]) -> OpsDocument? {
+        if let overview = docs.first(where: { $0.title.trimmingCharacters(in: .whitespaces).lowercased() == title.lowercased() + " overview" }) {
+            return overview
+        }
+        let cats = categories.isEmpty ? [title] : categories
+        return docs.first { cats.contains($0.category) && $0.tags.contains { $0.lowercased() == "index" } }
     }
 
     /// The first paragraph, plus a "Not here:" line when the page has one.

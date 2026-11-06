@@ -147,7 +147,8 @@ struct RepoCard: View {
                              detail: installed.map { "installed app: \($0)" }, attention: tagDiffers, mono: true))
             out.append(.init(symbol: "arrow.triangle.pull", label: "Open PRs", value: remote.openPRs == 0 ? "none" : "\(remote.openPRs)",
                              attention: remote.openPRs > 0))
-            out.append(buildRow(remote))
+            // A repo without GitHub Actions gets no build row (Kika, 2026-11-06: "no builds" is noise).
+            if let build = Self.buildRow(remote) { out.append(build) }
         } else if github.snapshot.remoteError != nil {
             out.append(.init(symbol: "globe", label: "GitHub", value: "couldn't check", dim: true))
         }
@@ -161,7 +162,7 @@ struct RepoCard: View {
         return out
     }
 
-    private func buildRow(_ remote: RemoteRepo) -> RepoFactRow.Row {
+    static func buildRow(_ remote: RemoteRepo) -> RepoFactRow.Row? {
         let when = remote.ciAt.map { ListDate.format($0) }
         let detail = [remote.ciName, when].compactMap { $0 }.joined(separator: " · ")
         switch remote.ci {
@@ -172,7 +173,7 @@ struct RepoCard: View {
         case .pending:
             return .init(symbol: "checkmark.circle", label: "Last build", value: "running", detail: detail.isEmpty ? nil : detail)
         case .none:
-            return .init(symbol: "checkmark.circle", label: "Last build", value: "no builds", dim: true)
+            return nil
         }
     }
 }
