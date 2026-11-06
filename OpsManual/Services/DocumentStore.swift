@@ -45,7 +45,8 @@ final class DocumentStore {
 
     var categories: [(name: String, count: Int)] {
         var counts: [String: Int] = [:]
-        for doc in activeDocuments { counts[doc.category, default: 0] += 1 }
+        // A category's overview page is not one of its pages (it shows as the list's footer).
+        for doc in activeDocuments where !CategoryOverviewPage.isOverview(doc) { counts[doc.category, default: 0] += 1 }
         return counts.keys.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
             .map { ($0, counts[$0]!) }
     }

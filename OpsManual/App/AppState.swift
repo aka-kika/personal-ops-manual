@@ -49,15 +49,16 @@ final class AppState {
         case .recent: Array(store.activeDocuments.prefix(Self.recentLimit))
         case .parked: store.parkedDocuments
         case .inbox, .drift: []
-        case .mcp: store.activeDocuments.filter { MCPGroups.categories.contains($0.category) }
-        case .category(let name): store.activeDocuments.filter { $0.category == name }
+        case .mcp: store.activeDocuments.filter { MCPGroups.categories.contains($0.category) && !CategoryOverviewPage.isOverview($0) }
+        case .category(let name): store.activeDocuments.filter { $0.category == name && !CategoryOverviewPage.isOverview($0) }
         }
     }
 
     /// Select a document; if it is not in the current list, jump to All Documents (or Parked) first.
     func open(docID: String, in store: DocumentStore) {
         guard let doc = store.document(id: docID) else { return }
-        if !visibleDocuments(in: store).contains(where: { $0.id == docID }) {
+        // An overview page opens from its category's footer, so it may stay in that list.
+        if !visibleDocuments(in: store).contains(where: { $0.id == docID }), !CategoryOverviewPage.isOverview(doc) {
             selection = doc.isParked ? .parked : .all
         }
         selectedDocID = docID

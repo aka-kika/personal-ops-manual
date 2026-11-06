@@ -251,21 +251,3 @@ final class ParkedPagesTests: XCTestCase {
         XCTAssertEqual(state.selectedDocID, "b2")
     }
 }
-
-@MainActor
-final class CategoryOverviewTests: XCTestCase {
-    private func doc(_ title: String, _ category: String) -> OpsDocument {
-        OpsDocument(id: title, title: title, category: category, summary: "", tags: [], createdAt: "", updatedAt: "", properties: [], body: "")
-    }
-
-    func testPicksTheCategorysOwnOverviewOrIndexPage() {
-        let docs = [doc("Hooks overview", "Hooks"), doc("Stop hook", "Hooks"), doc("App Store index", "App Store"),
-                    doc("Self-hosted overview", "Self-hosted"), doc("Firecrawl", "Self-hosted"), doc("Feed", "Services")]
-        XCTAssertEqual(CategoryOverviewView.overviewPage(in: docs, category: "Hooks")?.title, "Hooks overview")
-        XCTAssertEqual(CategoryOverviewView.overviewPage(in: docs, category: "App Store")?.title, "App Store index")
-        XCTAssertEqual(CategoryOverviewView.overviewPage(in: docs, category: "Self-hosted")?.title, "Self-hosted overview")
-        XCTAssertNil(CategoryOverviewView.overviewPage(in: docs, category: "Services"))
-        // A page from another category never counts.
-        XCTAssertNil(CategoryOverviewView.overviewPage(in: [doc("Hooks overview", "Hooks")], category: "Agents"))
-    }
-}

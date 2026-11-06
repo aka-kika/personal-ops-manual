@@ -6,6 +6,7 @@ struct ContentView: View {
     @Bindable var state: AppState
     var drift: DriftMonitor
     var github: GitHubMonitor
+    var live: LiveStatusMonitor
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
@@ -115,10 +116,11 @@ struct ContentView: View {
         } else if let id = state.selectedDocID, let doc = store.document(id: id) {
             ReaderView(doc: doc, store: store, state: state, github: github).titleBarColumn()
         } else if state.selection == .mcp {
-            CategoryOverviewView(title: "MCP", categories: MCPGroups.categories, store: store, state: state).titleBarColumn()
+            CategoryPaneView(title: "MCP", categories: MCPGroups.categories, store: store, state: state,
+                             drift: drift, github: github, live: live).titleBarColumn()
         } else if case .category(let name) = state.selection {
-            CategoryOverviewView(title: name, categories: [name], store: store, state: state, github: name == GitHubMatcher.category ? github : nil)
-                .titleBarColumn()
+            CategoryPaneView(title: name, categories: [name], store: store, state: state,
+                             drift: drift, github: github, live: live).titleBarColumn()
         } else {
             EmptyState(text: "Select a document").titleBarColumn()
         }

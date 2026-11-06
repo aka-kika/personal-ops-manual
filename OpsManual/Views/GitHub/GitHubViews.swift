@@ -103,6 +103,7 @@ struct GitHubListView: View {
             }
             .hidesTopScrollEdgeEffect()
             Spacer(minLength: 0)
+            OverviewFooter(title: GitHubMatcher.category, store: store, state: state)
             footer
         }
         .background(OpsTheme.canvas)
@@ -307,76 +308,6 @@ struct RepoFactRow: View {
     }
 }
 
-// MARK: - GitHub summary (the category overview's top)
-
-struct RepoSummaryCard: View {
-    let docs: [OpsDocument]
-    var github: GitHubMonitor
-    @Bindable var state: AppState
-
-    var body: some View {
-        let repos = docs.filter { github.info(for: $0).remote != nil }
-        let unsaved = docs.filter { github.hasUnsavedWork($0) }
-        let prs = repos.compactMap { github.info(for: $0).remote?.openPRs }.reduce(0, +)
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                tile("\(repos.count)", repos.count == 1 ? "repo on GitHub" : "repos on GitHub")
-                tile("\(unsaved.count)", "with work not saved", warm: !unsaved.isEmpty)
-                tile("\(prs)", prs == 1 ? "open pull request" : "open pull requests")
-            }
-            if !unsaved.isEmpty {
-                DriftCard {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("WORK NOT SAVED YET").font(OpsTheme.sectionLabelFont).tracking(0.5).foregroundStyle(.secondary)
-                            .padding(.bottom, 6)
-                        ForEach(Array(unsaved.enumerated()), id: \.element.id) { index, doc in
-                            if index > 0 { Rectangle().fill(OpsTheme.separator).frame(height: 1) }
-                            Button {
-                                state.selectedDocID = doc.id
-                            } label: {
-                                HStack {
-                                    Image(systemName: github.info(for: doc).remote?.visibility == .public ? "globe" : "lock")
-                                        .font(.system(size: 11)).foregroundStyle(.tertiary).frame(width: 14)
-                                    Text(GitHubMatcher.displayTitle(doc.title)).font(OpsTheme.rowFont)
-                                    Spacer()
-                                    Text(counts(doc)).font(OpsTheme.excerptFont).foregroundStyle(OpsTheme.peach)
-                                }
-                                .padding(.vertical, 7)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-            if let at = github.snapshot.refreshedAt {
-                DriftNote(symbol: "arrow.clockwise", text: "Refreshed \(ReaderDate.format(at)). Right-click GitHub in the sidebar to refresh.")
-            } else {
-                DriftNote(symbol: "arrow.clockwise", text: "Not refreshed yet. Right-click GitHub in the sidebar to refresh.")
-            }
-        }
-    }
-
-    private func counts(_ doc: OpsDocument) -> String {
-        guard let local = github.snapshot.local[doc.id] else { return "" }
-        var parts: [String] = []
-        if local.uncommitted > 0 { parts.append("\(local.uncommitted) uncommitted") }
-        if local.ahead > 0 { parts.append("\(local.ahead) unpushed") }
-        return parts.joined(separator: " · ")
-    }
-
-    private func tile(_ number: String, _ label: String, warm: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(number).font(.system(size: 20, weight: .semibold)).foregroundStyle(warm ? AnyShapeStyle(OpsTheme.peach) : AnyShapeStyle(.primary))
-            Text(label).font(OpsTheme.metaFont).foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(OpsTheme.separator))
-    }
-}
-
 // MARK: - MCP in one row
 
 /// "MCP (mine)" and "MCP (third-party)" as one list, grouped, a small mark on her own servers.
@@ -413,6 +344,8 @@ struct MCPListView: View {
                 .padding(.bottom, 12)
             }
             .hidesTopScrollEdgeEffect()
+            Spacer(minLength: 0)
+            OverviewFooter(title: "MCP", store: store, state: state)
         }
         .background(OpsTheme.canvas)
     }
@@ -421,5 +354,35 @@ struct MCPListView: View {
         OneLineRow(symbol: symbol, title: doc.title, selected: state.selectedDocID == doc.id)
             .onTapGesture { state.selectedDocID = doc.id }
             .contextMenu { PageContextMenu(doc: doc, store: store) }
+    }
+}
+
+// MARK: - Overview footer
+
+/// The list column's footer line for a category's overview page ("Overview: Machines overview").
+struct OverviewFooter: View {
+    let title: String
+    @Bindable var store: DocumentStore
+    @Bindable var state: AppState
+
+    var body: some View {
+        if let page = CategoryOverviewPage.page(for: title, in: store.activeDocuments) {
+            VStack(spacing: 0) {
+                Rectangle().fill(OpsTheme.separator).frame(height: 1)
+                Button {
+                    state.selectedDocID = page.id
+                } label: {
+                    Text("Overview: \(page.title)")
+                        .font(OpsTheme.metaFont)
+                        .foregroundStyle(state.selectedDocID == page.id ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 9)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .contextMenu { PageContextMenu(doc: page, store: store) }
+            }
+        }
     }
 }

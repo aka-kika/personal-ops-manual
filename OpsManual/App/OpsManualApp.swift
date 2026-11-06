@@ -7,6 +7,7 @@ struct OpsManualApp: App {
     @State private var state = AppState()
     @State private var drift = DriftMonitor()
     @State private var github = GitHubMonitor()
+    @State private var live = LiveStatusMonitor()
     @AppStorage(AppSettings.appearanceKey) private var appearanceRaw = AppearancePreference.system.rawValue
 
     init() {
@@ -19,7 +20,7 @@ struct OpsManualApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(store: store, state: state, drift: drift, github: github)
+            ContentView(store: store, state: state, drift: drift, github: github, live: live)
                 .preferredColorScheme((AppearancePreference(rawValue: appearanceRaw) ?? .system).colorScheme)
         }
         .windowStyle(.hiddenTitleBar)

@@ -34,6 +34,10 @@ struct DocumentListView: View {
                 }
                 .hidesTopScrollEdgeEffect()
             }
+            if case .category(let name) = state.selection {
+                Spacer(minLength: 0)
+                OverviewFooter(title: name, store: store, state: state)
+            }
         }
         .background(OpsTheme.canvas)
     }
