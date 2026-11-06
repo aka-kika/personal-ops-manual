@@ -158,23 +158,6 @@ final class FrontmatterChecksTests: XCTestCase {
         XCTAssertEqual(FrontmatterCodec.serialize(doc), page)
     }
 
-    @MainActor
-    func testSavingAnEditKeepsChecks() throws {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ops-checks-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
-        try page.write(to: dir.appendingPathComponent("personal-ops-manual-mtzs3wtc-abc123.md"), atomically: true, encoding: .utf8)
-        let store = DocumentStore(folder: dir, watch: false)
-        let doc = try XCTUnwrap(store.document(id: "mtzs3wtc-abc123"))
-        var draft = DocDraft(document: doc)
-        draft.body = "Changed body."
-        try store.update(id: doc.id, draft: draft)
-        let saved = try String(contentsOf: store.fileURL(for: try XCTUnwrap(store.document(id: doc.id))), encoding: .utf8)
-        XCTAssertTrue(saved.contains("checks:\n  - app \"Personal Ops Manual\" 2.3.0 notarized\n  - mcp personal-ops-manual\n  - port 4319 node\n"))
-        XCTAssertTrue(saved.contains("Changed body."))
-        XCTAssertEqual(store.document(id: doc.id)?.checks.count, 3)
-    }
-
     func testOtherListsAreKeptAndEmptyScalarsStayScalars() throws {
         let raw = page.replacingOccurrences(of: "status: active\n", with: "status: active\naliases:\n  - pom\n  - ops\nnote:\n")
         let doc = try XCTUnwrap(FrontmatterCodec.document(from: raw))

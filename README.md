@@ -76,37 +76,58 @@ scripts/ops-lock.sh unlock          # for the operator; locks again after 30 min
 scripts/ops-lock.sh lock            # lock now
 ```
 
-While the folder is locked the app is a reader too: New, Edit and Move to
-Trash explain that the manual is locked. `list_reports` also returns lines
+The app itself only reads (since 2.4.0): no editing, no new page, no trash.
+Its one write is the inbox's "Out of date" sections, described below. `list_reports` also returns lines
 someone typed into the inbox by hand under `malformed`, so none go unseen.
 
 ## Drift: does the page still match the Mac?
 
 A page can list the facts this Mac can confirm under `checks:` in its
-frontmatter, one per line:
+frontmatter, one per line, and name its repo and folder:
 
 ```yaml
+repo: aka-kika/personal-ops-manual
+path: ~/_KIKA_MAIN/_INFRA/apps/ops-manual
 checks:
-  - app "Personal Ops Manual" 2.3.0 notarized
+  - app "Personal Ops Manual" 2.4.0 notarized
   - mcp personal-ops-manual
   - port 4319 node
   - launchd com.akakika.socials running
   - cli gh 2.103.3
 ```
 
-The Drift row in the sidebar checks them (installed app version and
-notarization, MCP servers in `~/.claude.json`, listening ports, launch jobs,
-CLI versions) and lists the pages that no longer match, with a score and what
-drags it down. Each check runs one fixed program with fixed arguments; the
-page text never reaches a shell. Report adds one line to the inbox, in the
-same shape as `report_change`; Drift never edits a page. It checks when you
-open it, on Check now, and by itself once a day (Settings > General > Drift).
-The score card follows the Health page of
+The Drift row checks them (installed app version and notarization, MCP servers
+in `~/.claude.json`, listening ports, launch jobs, CLI versions) and, for
+GitHub pages, the latest release and the repo folder. It lists the pages that
+no longer match, with a score and what drags it down. Each check runs one fixed
+program with fixed arguments; the page text never reaches a shell.
+
+What is out of date goes into the inbox by itself, once, under
+`## Out of date: GitHub` and `## Out of date: this Mac`, placed before the
+readers' reports. Every line has the `report_change` shape. A fact that holds
+again leaves by itself; ticked lines are left for the operator. Drift never
+edits a page.
+
+The check also runs without the window, for the operator's run and the weekly
+maintenance:
+
+```bash
+scripts/opsmanual check     # or: "/Applications/Personal Ops Manual.app/Contents/MacOS/Personal Ops Manual" --check
+```
+
+The app checks when Drift opens and by itself once a day (Settings > General >
+Drift). The score card follows the Health page of
 [Cortex](https://github.com/envibagus/cortex) (MIT); ideas only, no code
 copied.
 
-The Inbox row shows the readers' reports inside the app, with a jump to
-their page. Pages with `status: parked` or `archived` sit under one Parked row.
+## GitHub, MCP, Inbox
+
+GitHub pages show as repos, grouped Private then Public, with one dot when
+work is not saved yet; a repo's page shows its branch, uncommitted and unpushed
+work, latest tag, open pull requests and last build. The data comes from the
+`gh` login already on the Mac and local `git`; the app holds no token. The two
+MCP categories share one row. The Inbox row shows the reports inside the app.
+Pages with `status: parked` or `archived` sit under one Parked row.
 
 ## Install
 

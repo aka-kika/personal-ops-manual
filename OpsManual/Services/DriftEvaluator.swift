@@ -56,6 +56,8 @@ enum DriftEvaluator {
                     continue
                 }
                 switch check.kind {
+                case .repo:
+                    continue   // never parsed from a checks: line
                 case .app:
                     let facts = probe.app(check.subject)
                     switch facts {

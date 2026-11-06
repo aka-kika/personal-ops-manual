@@ -5,7 +5,6 @@ struct ReaderView: View {
     let doc: OpsDocument
     @Bindable var store: DocumentStore
     @Bindable var state: AppState
-    var onAction: (DocumentContextAction, OpsDocument) -> Void
     @AppStorage(AppSettings.showYAMLKey) private var showYAML = false
 
     /// doc-viewer.tsx: category, "Updated <date>", then the tags when there are any.
@@ -24,9 +23,9 @@ struct ReaderView: View {
         let backlinks = store.backlinks(for: doc.id)
         VStack(spacing: 0) {
             ColumnHeader {
-                HeaderChromeButton(systemImage: "pencil", help: "Edit") { onAction(.edit, doc) }
-                HeaderChromeButton(systemImage: "folder", help: "Show in Finder") { onAction(.showInFinder, doc) }
-                HeaderChromeButton(systemImage: "trash", help: "Move to Trash") { onAction(.trash, doc) }
+                HeaderChromeButton(systemImage: "folder", help: "Show in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([store.fileURL(for: doc)])
+                }
             } title: {
                 HStack(alignment: .top, spacing: 8) {
                     if !doc.icon.isEmpty { AgentGlyph(name: doc.icon, size: 18).padding(.top, 1) }
@@ -71,6 +70,7 @@ struct ReaderView: View {
             .id(doc.id)   // reset scroll position per document
         }
         .background(OpsTheme.canvas)
+        .contextMenu { PageContextMenu(doc: doc, store: store) }
         .environment(\.openURL, OpenURLAction { url in
             if let id = WikiLinks.docID(from: url) {
                 state.open(docID: id, in: store)

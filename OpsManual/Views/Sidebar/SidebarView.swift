@@ -5,14 +5,41 @@ struct SidebarView: View {
     @Bindable var store: DocumentStore
     @Bindable var state: AppState
     var drift: DriftMonitor
-    @Environment(\.openSettings) private var openSettings
-    @State private var hoveringCategories = false
+    var github: GitHubMonitor
+
+    /// One sidebar row per category, except the two MCP categories, which share one "MCP" row.
+    private enum Row: Identifiable {
+        case category(String, Int)
+        case mcp(Int)
+        var id: String {
+            switch self {
+            case .category(let name, _): name
+            case .mcp: "MCP"
+            }
+        }
+    }
+
+    private var rows: [Row] {
+        var out: [Row] = []
+        var mcpCount = 0
+        var mcpIndex: Int?
+        for cat in store.categories {
+            if MCPGroups.categories.contains(cat.name) {
+                mcpCount += cat.count
+                if mcpIndex == nil { mcpIndex = out.count; out.append(.mcp(0)) }
+            } else {
+                out.append(.category(cat.name, cat.count))
+            }
+        }
+        if let mcpIndex { out[mcpIndex] = .mcp(mcpCount) }
+        return out
+    }
 
     var body: some View {
         VStack(spacing: 0) {
+            // Search is Cmd-K and Settings is in the app menu (Kika, 2026-11-06): no buttons here.
             ColumnHeader(leadingInset: OpsChrome.trafficLightHeaderInset) {
-                HeaderChromeButton(systemImage: "magnifyingglass", help: "Search") { state.isSearchPresented = true }
-                HeaderChromeButton(systemImage: "gearshape", help: "Settings") { openSettings() }
+                EmptyView()
             } title: {
                 navRow(.all, label: "All Documents", font: OpsTheme.titleFont, icon: nil, count: store.activeDocuments.count)
             }
@@ -26,9 +53,20 @@ struct SidebarView: View {
                            count: drift.driftedPages.isEmpty ? nil : drift.driftedPages.count)
                         .help("Pages whose claims no longer match this Mac")
                     sectionHeader
-                    ForEach(store.categories, id: \.name) { cat in
-                        navRow(.category(cat.name), label: cat.name, font: OpsTheme.rowFont,
-                               icon: CategoryIcons.icon(for: cat.name), count: cat.count)
+                    ForEach(rows) { row in
+                        switch row {
+                        case .mcp(let count):
+                            navRow(.mcp, label: "MCP", font: OpsTheme.rowFont, icon: .symbol("server.rack"), count: count)
+                        case .category(let name, let count):
+                            if name == GitHubMatcher.category {
+                                navRow(.category(name), label: name, font: OpsTheme.rowFont,
+                                       icon: CategoryIcons.icon(for: name), count: count)
+                                    .contextMenu { githubMenu }
+                            } else {
+                                navRow(.category(name), label: name, font: OpsTheme.rowFont,
+                                       icon: CategoryIcons.icon(for: name), count: count)
+                            }
+                        }
                     }
                     if !store.parkedDocuments.isEmpty {
                         // Parked and archived pages: one quiet row at the bottom.
@@ -47,35 +85,41 @@ struct SidebarView: View {
         .background(OpsTheme.sidebarCanvas)
     }
 
-    private var sectionHeader: some View {
-        HStack {
-            Text("CATEGORIES")
-                .font(OpsTheme.sectionLabelFont)
-                .tracking(0.5)
-                .foregroundStyle(.secondary)
-            Spacer()
-            if hoveringCategories {
-                Button { state.editorTarget = .new(category: "__new__") } label: {
-                    Image(systemName: "plus").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("New Category")
+    /// Kika's words, in her order: "refresh, copy path, open github".
+    @ViewBuilder
+    private var githubMenu: some View {
+        Button("Refresh") {
+            Task {
+                await github.refresh(store.documents)
+                drift.setRepoResults(github.driftResults(for: store.documents))
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 14)
-        .padding(.bottom, 4)
-        .contentShape(Rectangle())
-        .onHover { hoveringCategories = $0 }
+        .disabled(github.isRefreshing)
+        Button("Copy Path") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(store.folder.path, forType: .string)
+        }
+        Button("Open on GitHub") {
+            let login = github.snapshot.login ?? ""
+            if let url = URL(string: "https://github.com/\(login)") { NSWorkspace.shared.open(url) }
+        }
+    }
+
+    private var sectionHeader: some View {
+        Text("CATEGORIES")
+            .font(OpsTheme.sectionLabelFont)
+            .tracking(0.5)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.top, 14)
+            .padding(.bottom, 4)
     }
 
     private func navRow(_ target: SidebarSelection, label: String, font: Font, icon: CategoryIcons.Icon?, count: Int?) -> some View {
         let selected = state.selection == target
         return Button {
-            state.selection = target
-            state.selectedDocID = nil
-            state.driftPageID = nil
-            state.inboxReportID = nil
+            state.select(target)
         } label: {
             HStack(spacing: 8) {
                 switch icon {
@@ -107,4 +151,12 @@ struct SidebarView: View {
         .buttonStyle(.plain)
         .padding(.horizontal, icon == nil ? -8 : 0)
     }
+}
+
+/// The two MCP categories shown as one sidebar row (Kika, 2026-11-06). The categories
+/// stay as they are on disk; the group comes from each page's category.
+enum MCPGroups {
+    static let mine = "MCP (mine)"
+    static let thirdParty = "MCP (third-party)"
+    static let categories: Set<String> = [mine, thirdParty]
 }

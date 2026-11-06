@@ -5,12 +5,12 @@ struct ContentView: View {
     @Bindable var store: DocumentStore
     @Bindable var state: AppState
     var drift: DriftMonitor
+    var github: GitHubMonitor
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var trashError: String?
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(store: store, state: state, drift: drift)
+            SidebarView(store: store, state: state, drift: drift, github: github)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
                 .titleBarColumn()
         } content: {
@@ -26,37 +26,6 @@ struct ContentView: View {
         .background(MainWindowChromeConfigurator())
         .background(TitlebarOverlayGuard(dismiss: state.isSearchPresented ? { state.isSearchPresented = false } : nil))
         .frame(minWidth: 900, minHeight: 560)
-        .sheet(item: $state.editorTarget) { target in
-            DocumentEditorSheet(target: target, store: store) { createdID in
-                state.editorTarget = nil
-                if let createdID { state.open(docID: createdID, in: store) }
-            }
-        }
-        .alert("Move \"\(state.trashCandidate?.title ?? "")\" to Trash?", isPresented: Binding(
-            get: { state.trashCandidate != nil }, set: { if !$0 { state.trashCandidate = nil } })) {
-            Button("Move to Trash", role: .destructive) {
-                if let doc = state.trashCandidate {
-                    do {
-                        try store.trash(filePath: store.fileURL(for: doc).path)
-                        if state.selectedDocID == doc.id, store.document(id: doc.id) == nil {
-                            state.selectedDocID = nil
-                        }
-                    } catch {
-                        trashError = error.localizedDescription
-                    }
-                }
-                state.trashCandidate = nil
-            }
-            Button("Cancel", role: .cancel) { state.trashCandidate = nil }
-        } message: {
-            Text("The file goes to the Finder Trash and can be put back.")
-        }
-        .alert("Cannot Move to Trash", isPresented: Binding(
-            get: { trashError != nil }, set: { if !$0 { trashError = nil } })) {
-            Button("OK", role: .cancel) { trashError = nil }
-        } message: {
-            Text(trashError ?? "")
-        }
         .overlay {
             // A floating palette instead of a sheet: a click outside closes it, Escape too.
             if state.isSearchPresented {
@@ -80,6 +49,7 @@ struct ContentView: View {
             // nothing written to the real settings (What's new would count as seen).
             guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
             drift.startSchedule { [store] in DriftMonitor.pages(from: store.documents) }
+            github.startSchedule(documents: { [store] in store.documents }, interval: { [drift] in drift.interval })
             if WhatsNew.shouldShow() { state.whatsNew = WhatsNew.notes(for: WhatsNew.currentVersion) }
         }
         .onChange(of: state.selection) { _, selection in
@@ -88,6 +58,16 @@ struct ContentView: View {
         }
         .onChange(of: store.documents) { _, docs in
             drift.prune(keeping: Set(docs.filter { !$0.checks.isEmpty && !$0.isParked }.map(\.id)))
+            drift.setRepoResults(github.driftResults(for: docs))
+        }
+        .onChange(of: github.snapshot.refreshedAt) { _, _ in
+            drift.setRepoResults(github.driftResults(for: store.documents))
+            let sections = InboxSync.sections(checks: drift.checkResults, repo: drift.repoResults, githubRead: github.remoteKnown)
+            syncInbox(github: sections.github, mac: sections.mac)
+        }
+        .onChange(of: drift.lastChecked) { _, _ in
+            let sections = InboxSync.sections(checks: drift.checkResults, repo: drift.repoResults, githubRead: false)
+            syncInbox(github: sections.github, mac: sections.mac)
         }
         .sheet(isPresented: Binding(get: { state.whatsNew != nil }, set: { if !$0 { state.whatsNew = nil; WhatsNew.markSeen() } })) {
             WhatsNewSheet(appName: "Personal Ops Manual", lines: state.whatsNew ?? []) {
@@ -97,12 +77,21 @@ struct ContentView: View {
         }
     }
 
+    /// What is out of date goes into the inbox by itself (never under unit tests).
+    private func syncInbox(github: [InboxSync.Finding]?, mac: [InboxSync.Finding]?) {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+        _ = try? InboxSync.write(github: github, mac: mac, inboxURL: store.inboxFileURL)
+        store.load()
+    }
+
     @ViewBuilder
     private var contentColumn: some View {
         switch state.selection {
         case .drift: DriftListView(store: store, state: state, drift: drift)
         case .inbox: InboxListView(store: store, state: state)
-        default: DocumentListView(store: store, state: state, onContextAction: handle)
+        case .mcp: MCPListView(store: store, state: state)
+        case .category(GitHubMatcher.category): GitHubListView(store: store, state: state, github: github)
+        default: DocumentListView(store: store, state: state)
         }
     }
 
@@ -120,31 +109,21 @@ struct ContentView: View {
     @ViewBuilder
     private var detailColumn: some View {
         if state.selection == .drift && state.selectedDocID == nil {
-            DriftDetailView(store: store, state: state, drift: drift).titleBarColumn()
+            DriftDetailView(store: store, state: state, drift: drift, github: github).titleBarColumn()
         } else if state.selection == .inbox && state.selectedDocID == nil {
             InboxDetailView(store: store, state: state).titleBarColumn()
         } else if let id = state.selectedDocID, let doc = store.document(id: id) {
-            ReaderView(doc: doc, store: store, state: state, onAction: handle).titleBarColumn()
+            ReaderView(doc: doc, store: store, state: state).titleBarColumn()
+        } else if state.isGitHub, let id = state.repoPageID, let doc = store.document(id: id) {
+            RepoPageView(doc: doc, store: store, state: state, github: github, drift: drift).titleBarColumn()
+        } else if state.selection == .mcp {
+            CategoryOverviewView(title: "MCP", categories: MCPGroups.categories, store: store, state: state).titleBarColumn()
         } else if case .category(let name) = state.selection {
-            CategoryOverviewView(category: name, store: store, state: state).titleBarColumn()
+            CategoryOverviewView(title: name, categories: [name], store: store, state: state, github: name == GitHubMatcher.category ? github : nil)
+                .titleBarColumn()
         } else {
             EmptyState(text: "Select a document").titleBarColumn()
         }
     }
 
-    func handle(_ action: DocumentContextAction, _ doc: OpsDocument) {
-        switch action {
-        case .edit: state.editorTarget = .edit(id: doc.id, filePath: doc.filePath)
-        case .showInFinder: NSWorkspace.shared.activateFileViewerSelecting([store.fileURL(for: doc)])
-        case .copyPath:
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(store.fileURL(for: doc).path, forType: .string)
-        case .trash:
-            if store.isLocked {
-                trashError = LockedError().errorDescription
-            } else {
-                state.trashCandidate = doc
-            }
-        }
-    }
 }

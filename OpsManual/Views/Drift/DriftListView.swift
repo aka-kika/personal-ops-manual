@@ -37,8 +37,7 @@ struct DriftListView: View {
                 ScrollView {
                     LazyVStack(spacing: 1) {
                         ForEach(drift.driftedPages) { page in
-                            DriftPageRow(page: page, reported: page.results.allSatisfy { drift.isReported($0, in: store.inboxReports) },
-                                         selected: state.driftPageID == page.id)
+                            DriftPageRow(page: page, selected: state.driftPageID == page.id)
                                 .onTapGesture { state.driftPageID = page.id }
                         }
                     }
@@ -75,7 +74,6 @@ struct DriftListView: View {
 
 private struct DriftPageRow: View {
     let page: DriftPageGroup
-    let reported: Bool
     let selected: Bool
 
     var body: some View {
@@ -90,9 +88,6 @@ private struct DriftPageRow: View {
                     }
                 }
                 Text(line).font(OpsTheme.excerptFont).foregroundStyle(.secondary).lineLimit(2)
-                if reported {
-                    DriftTag(text: "Reported")
-                }
             }
         }
         .padding(.horizontal, 10)

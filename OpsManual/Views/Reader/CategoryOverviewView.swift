@@ -5,9 +5,30 @@ import AppKit
 /// holds and its rules. The rules come from the category's own overview page
 /// ("Hooks overview", "App Store index") when it has one; otherwise its pages are listed.
 struct CategoryOverviewView: View {
-    let category: String
+    /// The row's name: a category, or "MCP" for the two MCP categories together.
+    let title: String
+    let categories: Set<String>
     @Bindable var store: DocumentStore
     @Bindable var state: AppState
+    /// Set for the GitHub category: its repo summary sits on top.
+    var github: GitHubMonitor? = nil
+
+    private var category: String { title }
+
+    /// The overview page among this row's pages: one category's own, else one named after the row ("MCP overview").
+    private func overviewPage(_ docs: [OpsDocument]) -> OpsDocument? {
+        for name in categories.sorted() {
+            if let page = Self.overviewPage(in: docs, category: name) { return page }
+        }
+        var renamed: [OpsDocument] = []
+        for doc in docs {
+            var copy = doc
+            copy.category = title
+            renamed.append(copy)
+        }
+        guard let found = Self.overviewPage(in: renamed, category: title) else { return nil }
+        return docs.first { $0.id == found.id }
+    }
 
     /// The page that describes the category: its title says "overview" or "index".
     static func overviewPage(in docs: [OpsDocument], category: String) -> OpsDocument? {
@@ -35,8 +56,8 @@ struct CategoryOverviewView: View {
     }
 
     var body: some View {
-        let docs = store.activeDocuments.filter { $0.category == category }
-        let overview = Self.overviewPage(in: docs, category: category)
+        let docs = store.activeDocuments.filter { categories.contains($0.category) }
+        let overview = overviewPage(docs)
         VStack(spacing: 0) {
             ColumnHeader {
                 if let overview {
@@ -55,6 +76,10 @@ struct CategoryOverviewView: View {
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    if let github {
+                        RepoSummaryCard(docs: docs, github: github, state: state)
+                            .padding(.bottom, 18)
+                    }
                     if let overview {
                         Text("FROM \(overview.title.uppercased())")
                             .font(OpsTheme.sectionLabelFont).tracking(0.5).foregroundStyle(.secondary)
@@ -95,7 +120,7 @@ struct CategoryOverviewView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .hidesTopScrollEdgeEffect()
-            .id(category)
+            .id(title)
         }
         .background(OpsTheme.canvas)
         .environment(\.openURL, OpenURLAction { url in
@@ -113,7 +138,7 @@ struct CategoryOverviewView: View {
 
     @ViewBuilder
     private var categoryIcon: some View {
-        switch CategoryIcons.icon(for: category) {
+        switch title == "MCP" ? CategoryIcons.Icon.symbol("server.rack") : CategoryIcons.icon(for: category) {
         case .symbol(let name):
             Image(systemName: name).font(.system(size: 15, weight: .light)).foregroundStyle(.secondary)
         case .asset(let name):

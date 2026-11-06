@@ -13,6 +13,9 @@ import Foundation
 struct DriftCheck: Hashable, Sendable, Codable {
     enum Kind: String, CaseIterable, Sendable, Codable {
         case app, mcp, port, launchd, cli
+        /// Not a checks: line: a page's claims about its GitHub repo (latest release,
+        /// repo, path), checked by the GitHub refresh and shown in Drift.
+        case repo
 
         /// The claim's name in the Drift views.
         var claimTitle: String {
@@ -22,6 +25,7 @@ struct DriftCheck: Hashable, Sendable, Codable {
             case .port: "Port"
             case .launchd: "Launch job"
             case .cli: "CLI version"
+            case .repo: "GitHub"
             }
         }
 
@@ -32,6 +36,7 @@ struct DriftCheck: Hashable, Sendable, Codable {
             case .mcp: "MCP servers"
             case .port: "Ports"
             case .launchd: "Launch jobs"
+            case .repo: "GitHub repos"
             }
         }
 
@@ -41,6 +46,7 @@ struct DriftCheck: Hashable, Sendable, Codable {
             case .mcp: "server.rack"
             case .port: "network"
             case .launchd: "bolt"
+            case .repo: "arrow.triangle.branch"
             }
         }
     }
@@ -68,7 +74,7 @@ struct DriftCheck: Hashable, Sendable, Codable {
         case .failure(let e): return .failure(e)
         }
         guard let first = words.first else { return .failure(.empty) }
-        guard let kind = Kind(rawValue: first.lowercased()) else { return .failure(.unknownKind(first)) }
+        guard let kind = Kind(rawValue: first.lowercased()), kind != .repo else { return .failure(.unknownKind(first)) }
         guard words.count >= 2, !words[1].isEmpty else { return .failure(.missingSubject) }
         var check = DriftCheck(line: line.trimmingCharacters(in: .whitespaces), kind: kind, subject: words[1])
         var rest = Array(words.dropFirst(2))
@@ -89,7 +95,7 @@ struct DriftCheck: Hashable, Sendable, Codable {
         case .cli:
             guard isPlainName(check.subject) else { return .failure(.badName(check.subject)) }
             check.expected = rest.first
-        case .mcp:
+        case .mcp, .repo:
             break
         }
         return .success(check)

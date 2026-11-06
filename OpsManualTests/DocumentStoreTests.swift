@@ -33,46 +33,6 @@ final class DocumentStoreTests: XCTestCase {
         XCTAssertEqual(store.categories.map(\.count), [1, 1])
     }
 
-    func testCreateWritesFileWithSlugAndId() throws {
-        let store = DocumentStore(folder: dir, watch: false)
-        var draft = DocDraft()
-        draft.title = "New Page!"
-        draft.category = "Ops"
-        draft.body = "Hello"
-        let doc = try store.create(draft)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent("new-page-\(doc.id).md").path))
-        XCTAssertEqual(store.documents.count, 1)
-        XCTAssertEqual(store.excerpt(for: doc), "Hello")
-    }
-
-    func testLockedFolderRefusesChangesWithAClearError() throws {
-        try write("a-1.md", page("A", id: "1", body: "a"))
-        let store = DocumentStore(folder: dir, watch: false)
-        XCTAssertFalse(store.isLocked)
-        try FileManager.default.setAttributes([.immutable: true], ofItemAtPath: dir.path)
-        XCTAssertTrue(store.isLocked)
-        var draft = DocDraft()
-        draft.title = "Blocked"
-        draft.category = "Ops"
-        XCTAssertThrowsError(try store.create(draft)) { XCTAssertTrue($0 is LockedError) }
-        XCTAssertThrowsError(try store.update(id: "1", draft: DocDraft(document: store.document(id: "1")!))) { XCTAssertTrue($0 is LockedError) }
-        XCTAssertThrowsError(try store.trash(id: "1")) { XCTAssertTrue($0 is LockedError) }
-        XCTAssertEqual(store.documents.count, 1)
-    }
-
-    func testUpdateRenamesFileWhenTitleChanges() throws {
-        try write("old-1.md", page("Old", id: "1", body: "x"))
-        let store = DocumentStore(folder: dir, watch: false)
-        var draft = DocDraft(document: store.document(id: "1")!)
-        draft.title = "Renamed"
-        let updated = try store.update(id: "1", draft: draft)
-        XCTAssertEqual(updated.title, "Renamed")
-        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent("old-1.md").path))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent("renamed-1.md").path))
-        XCTAssertEqual(updated.createdAt, "2026-09-13T10:00:00.000Z")
-        XCTAssertNotEqual(updated.updatedAt, "2026-09-13T10:00:00.000Z")
-    }
-
     func testSearchMatchesTitleTagsBodyAndSortsByTitle() throws {
         try write("z-1.md", page("Zebra", id: "1", body: "nothing here"))
         try write("a-2.md", page("Apple", id: "2", body: "the zebra crossing is long"))
@@ -113,77 +73,6 @@ final class DocumentStoreTests: XCTestCase {
         XCTAssertNil(store.idForTitle("missing"))
     }
 
-    func testHandNamedFileIsUpdatedAndTrashedInPlace() throws {
-        try write("WEIRD name.md", page("Tidy", id: "7", body: "x"))
-        let store = DocumentStore(folder: dir, watch: false)
-        XCTAssertEqual(store.fileURL(for: store.document(id: "7")!).lastPathComponent, "WEIRD name.md")
-        var draft = DocDraft(document: store.document(id: "7")!)
-        draft.body = "changed"
-        try store.update(id: "7", draft: draft)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent("WEIRD name.md").path))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent("tidy-7.md").path))
-        try store.trash(id: "7")
-        XCTAssertEqual(store.documents.count, 0)
-    }
-
-    func testUpdateThrowsWhenTheIdIsGone() throws {
-        let store = DocumentStore(folder: dir, watch: false)
-        XCTAssertThrowsError(try store.update(id: "missing", draft: DocDraft())) { error in
-            guard case DocumentStoreError.documentNotFound(let id) = error else {
-                return XCTFail("expected documentNotFound, got \(error)")
-            }
-            XCTAssertEqual(id, "missing")
-            XCTAssertFalse((error as? LocalizedError)?.errorDescription?.isEmpty ?? true)
-        }
-    }
-
-    /// The new file is written before the old one is removed, so a write that
-    /// cannot land leaves the document on disk untouched.
-    func testFailedWriteLeavesTheOriginalFileInPlace() throws {
-        try write("old-1.md", page("Old", id: "1", body: "original body"))
-        let store = DocumentStore(folder: dir, watch: false)
-        var draft = DocDraft(document: store.document(id: "1")!)
-        draft.title = "Renamed"
-        draft.body = "new body"
-
-        let original = try String(contentsOf: dir.appendingPathComponent("old-1.md"), encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: dir.path)
-        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path) }
-
-        XCTAssertThrowsError(try store.update(id: "1", draft: draft))
-
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent("old-1.md").path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent("renamed-1.md").path))
-        XCTAssertEqual(try String(contentsOf: dir.appendingPathComponent("old-1.md"), encoding: .utf8), original)
-    }
-
-    /// `fileURL(for:)` returns the name on disk, `newURL` the lowercase slug. On a
-    /// case-insensitive volume those are the same directory entry even though the
-    /// strings differ, so removing the old URL after the write deletes what was
-    /// just written.
-    func testCaseOnlyRenameKeepsTheFile() throws {
-        try write("Weird-Name-7.md", page("Weird Name", id: "7", body: "original"))
-        let store = DocumentStore(folder: dir, watch: false)
-        var draft = DocDraft(document: store.document(id: "7")!)
-        draft.body = "changed"
-        try store.update(id: "7", draft: draft)
-
-        let files = try FileManager.default.contentsOfDirectory(atPath: dir.path).filter { $0.hasSuffix(".md") }
-        XCTAssertEqual(files.count, 1, "expected one file, found \(files)")
-        let contents = try String(contentsOf: dir.appendingPathComponent(files[0]), encoding: .utf8)
-        XCTAssertTrue(contents.contains("changed"))
-        XCTAssertEqual(store.documents.count, 1)
-    }
-
-    func testTrashRemovesFromFolder() throws {
-        try write("t-1.md", page("T", id: "1", body: "x"))
-        let store = DocumentStore(folder: dir, watch: false)
-        try store.trash(id: "1")
-        XCTAssertEqual(store.documents.count, 0)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent("t-1.md").path))
-    }
-
     /// A folder that cannot be opened must report itself inactive rather than
     /// pretending to watch (the failure is logged, not swallowed).
     func testWatcherIsInactiveWhenTheFolderCannotBeOpened() {
@@ -211,34 +100,5 @@ final class DocumentStoreTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(50))
         }
         XCTAssertTrue(store.document(id: "9")?.body.contains("appended line") == true)
-    }
-
-    func testDuplicateIDFilesStayIndependentOnUpdateAndTrash() throws {
-        try write("first.md", page("First", id: "dup", body: "one", updated: "2026-09-13T12:00:00.000Z"))
-        try write("second.md", page("Second", id: "dup", body: "two", updated: "2026-09-13T10:00:00.000Z"))
-        let store = DocumentStore(folder: dir, watch: false)
-        XCTAssertEqual(store.documents.count, 2)
-
-        let secondPath = dir.appendingPathComponent("second.md").path
-        var draft = DocDraft(document: try XCTUnwrap(store.document(filePath: secondPath)))
-        draft.body = "two updated"
-        try store.update(filePath: secondPath, draft: draft)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent("first.md").path))
-        XCTAssertTrue(try String(contentsOf: dir.appendingPathComponent("first.md"), encoding: .utf8).contains("one"))
-
-        try store.trash(filePath: dir.appendingPathComponent("first.md").path)
-        XCTAssertEqual(store.documents.count, 1)
-        XCTAssertEqual(store.documents.first?.body, "two updated")
-    }
-
-    func testInvalidPropertyKeysAreRefused() throws {
-        let store = DocumentStore(folder: dir, watch: false)
-        var draft = DocDraft()
-        draft.title = "Page"
-        draft.category = "Ops"
-        draft.properties = [DocProperty(key: "id", value: "override")]
-        XCTAssertThrowsError(try store.create(draft))
-        draft.properties = [DocProperty(key: "bad:key", value: "v")]
-        XCTAssertThrowsError(try store.create(draft))
     }
 }

@@ -6,9 +6,12 @@ struct OpsManualApp: App {
     @State private var store: DocumentStore
     @State private var state = AppState()
     @State private var drift = DriftMonitor()
+    @State private var github = GitHubMonitor()
     @AppStorage(AppSettings.appearanceKey) private var appearanceRaw = AppearancePreference.system.rawValue
 
     init() {
+        // `--check` / `check`: the daily check without a window, then exit.
+        if HeadlessCheck.isRequested { exit(HeadlessCheck.run()) }
         // Set the Dock tile from the bundle so a stale system icon cache can never show an old icon.
         if let icon = NSImage(named: "AppIcon") { NSApplication.shared.applicationIconImage = icon }
         _store = State(initialValue: DocumentStore(folder: AppSettings.documentsURL))
@@ -16,7 +19,7 @@ struct OpsManualApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(store: store, state: state, drift: drift)
+            ContentView(store: store, state: state, drift: drift, github: github)
                 .preferredColorScheme((AppearancePreference(rawValue: appearanceRaw) ?? .system).colorScheme)
         }
         .windowStyle(.hiddenTitleBar)

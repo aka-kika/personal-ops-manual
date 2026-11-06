@@ -5,12 +5,13 @@ struct DriftDetailView: View {
     @Bindable var store: DocumentStore
     @Bindable var state: AppState
     var drift: DriftMonitor
+    var github: GitHubMonitor
 
     var body: some View {
         if let id = state.driftPageID, !drift.results(forPage: id).isEmpty {
             DriftPageView(pageID: id, store: store, state: state, drift: drift)
         } else {
-            DriftOverviewView(store: store, drift: drift)
+            DriftOverviewView(store: store, state: state, drift: drift, github: github)
         }
     }
 }
@@ -22,7 +23,9 @@ struct DriftDetailView: View {
 
 struct DriftOverviewView: View {
     @Bindable var store: DocumentStore
+    @Bindable var state: AppState
     var drift: DriftMonitor
+    var github: GitHubMonitor
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,6 +46,7 @@ struct DriftOverviewView: View {
                         scoreCard
                         factorsCard
                     }
+                    reposLine
                     notes
                 }
                 .frame(maxWidth: 640, alignment: .leading)
@@ -164,6 +168,30 @@ struct DriftOverviewView: View {
         }
     }
 
+    /// The total in Drift (Kika, 2026-11-06): repos with work not saved yet, counting
+    /// only pages that name their folder with a path: line.
+    @ViewBuilder
+    private var reposLine: some View {
+        let pages = github.unsavedRepoPages(in: store.activeDocuments)
+        if !pages.isEmpty {
+            Button {
+                state.select(.category(GitHubMatcher.category))
+            } label: {
+                HStack(spacing: 8) {
+                    Circle().fill(OpsTheme.peachMark).frame(width: 6, height: 6)
+                    Text("Repos: \(pages.count) with uncommitted or unpushed work").font(OpsTheme.rowFont)
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(OpsTheme.separator))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     private var noChecksCard: some View {
         DriftCard {
             VStack(alignment: .leading, spacing: 6) {
@@ -196,9 +224,7 @@ struct DriftOverviewView: View {
             DriftNote(symbol: "xmark",
                       text: "\(unknown.count) \(unknown.count == 1 ? "check" : "checks") couldn't run: \(first.pageTitle), \(first.claim.lowercased()): \(first.now)\(more). Not counted as drift.")
         }
-        if let error = drift.reportError {
-            DriftNote(symbol: "exclamationmark.triangle", text: error)
-        }
+        DriftNote(symbol: "tray", text: "What is out of date goes to the Inbox by itself, for the operator.")
     }
 }
 
@@ -239,17 +265,9 @@ struct DriftPageView: View {
                             ClaimGrid.header
                             ForEach(results) { result in
                                 Rectangle().fill(OpsTheme.separator).frame(height: 1)
-                                ClaimRow(result: result,
-                                         reportedAt: drift.reportDate(result, in: store.inboxReports),
-                                         isReported: drift.isReported(result, in: store.inboxReports)) {
-                                    drift.report(result, inboxURL: store.inboxFileURL)
-                                    store.load()
-                                }
+                                ClaimRow(result: result)
                             }
                         }
-                    }
-                    if let error = drift.reportError {
-                        DriftNote(symbol: "exclamationmark.triangle", text: error)
                     }
                 }
                 .frame(maxWidth: 640, alignment: .leading)
@@ -276,8 +294,7 @@ struct DriftPageView: View {
 
 private enum ClaimGrid {
     static let says: CGFloat = 96
-    static let now: CGFloat = 120
-    static let action: CGFloat = 84
+    static let now: CGFloat = 160
 
     static var header: some View {
         HStack(spacing: 10) {
@@ -285,7 +302,6 @@ private enum ClaimGrid {
             Text("Claim").frame(maxWidth: .infinity, alignment: .leading)
             Text("Page says").frame(width: says, alignment: .leading)
             Text("Now").frame(width: now, alignment: .leading)
-            Color.clear.frame(width: action, height: 1)
         }
         .font(OpsTheme.metaFont)
         .foregroundStyle(.tertiary)
@@ -295,9 +311,6 @@ private enum ClaimGrid {
 
 private struct ClaimRow: View {
     let result: DriftResult
-    let reportedAt: Date?
-    let isReported: Bool
-    let onReport: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -316,25 +329,9 @@ private struct ClaimRow: View {
                     .foregroundStyle(nowStyle)
                     .lineLimit(3).frame(width: ClaimGrid.now, alignment: .leading)
                     .help(result.now)
-                action.frame(width: ClaimGrid.action, alignment: .trailing)
-            }
-            if isReported, result.status == .drifted {
-                Text("\(Text(filedLabel)) \(Text(result.reportWhat).foregroundStyle(.primary))")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(OpsTheme.codeBackground))
-                    .padding(.leading, 24)
             }
         }
         .padding(.vertical, 10)
-    }
-
-    private var filedLabel: String {
-        if let reportedAt { return "Filed to the Inbox at \(ListDate.format(reportedAt)):" }
-        return "Filed to the Inbox:"
     }
 
     private var nowStyle: AnyShapeStyle {
@@ -379,24 +376,6 @@ private struct ClaimRow: View {
             .help(result.status == .unknown ? "Couldn't check: \(result.now)" : result.source)
     }
 
-    @ViewBuilder
-    private var action: some View {
-        if result.status == .drifted {
-            if isReported {
-                DriftTag(text: "Reported")
-            } else {
-                // Icon only (Kika, 2026-11-06: "only icon for send, calmer").
-                Button(action: onReport) {
-                    Image(systemName: "paperplane").font(.system(size: 12, weight: .medium))
-                }
-                .controlSize(.small)
-                .help("Send to operator")
-                .accessibilityLabel("Send to operator")
-            }
-        } else {
-            Color.clear.frame(height: 1)
-        }
-    }
 }
 
 // MARK: - Shared pieces

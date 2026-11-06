@@ -1,0 +1,9 @@
+#!/bin/zsh
+# opsmanual check: the Personal Ops Manual's daily check without the window.
+# Writes what is out of date into the manual's inbox (two sections) and prints a summary.
+set -euo pipefail
+APP="${OPSMANUAL_APP:-/Applications/Personal Ops Manual.app}"
+case "${1:-check}" in
+  check) exec "$APP/Contents/MacOS/Personal Ops Manual" --check ;;
+  *) echo "usage: opsmanual check" >&2; exit 2 ;;
+esac

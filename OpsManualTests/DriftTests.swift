@@ -141,35 +141,6 @@ final class DriftMonitorTests: XCTestCase {
         again.prune(keeping: [])
         XCTAssertTrue(again.results.isEmpty)
     }
-
-    func testReportAppendsOneReportChangeLineAndIsSeenAsReported() async throws {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ops-drift-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let inbox = dir.appendingPathComponent("_inbox/reports.md")
-        var probe = FakeProbe()
-        probe.apps["Personal Ops Manual"] = .installed(path: "/Applications/Personal Ops Manual.app", version: "2.2.5")
-        let monitor = DriftMonitor(defaults: try makeDefaults(), probe: probe)
-        await monitor.check([.init(id: "p", title: "Personal Ops Manual", checks: [#"app "Personal Ops Manual" 2.2.4"#])])
-        let result = try XCTUnwrap(monitor.drifted.first)
-
-        let when = Date(timeIntervalSince1970: 1_793_000_000)
-        XCTAssertTrue(monitor.report(result, inboxURL: inbox, at: when))
-        let text = try String(contentsOf: inbox, encoding: .utf8)
-        XCTAssertTrue(text.hasPrefix("# Reports for the operator"))
-        let reports = InboxReport.parse(text)
-        XCTAssertEqual(reports.count, 1)
-        XCTAssertEqual(reports[0].agent, "drift")
-        XCTAssertEqual(reports[0].page, "Personal Ops Manual")
-        XCTAssertEqual(reports[0].what, "page says \"App version 2.2.4\"; now 2.2.5")
-        XCTAssertTrue(reports[0].evidence.hasPrefix("/Applications/Personal Ops Manual.app Info.plist, checked "))
-        XCTAssertFalse(reports[0].malformed)
-        XCTAssertTrue(monitor.isReported(result, in: reports))
-
-        // A second report goes on its own line, even when the file lost its last newline.
-        try (text.trimmingCharacters(in: .newlines)).write(to: inbox, atomically: true, encoding: .utf8)
-        XCTAssertTrue(monitor.report(result, inboxURL: inbox, at: when))
-        XCTAssertEqual(InboxReport.parse(try String(contentsOf: inbox, encoding: .utf8)).count, 2)
-    }
 }
 
 final class InboxReportTests: XCTestCase {
@@ -273,6 +244,7 @@ final class ParkedPagesTests: XCTestCase {
     }
 }
 
+@MainActor
 final class CategoryOverviewTests: XCTestCase {
     private func doc(_ title: String, _ category: String) -> OpsDocument {
         OpsDocument(id: title, title: title, category: category, summary: "", tags: [], createdAt: "", updatedAt: "", properties: [], body: "")

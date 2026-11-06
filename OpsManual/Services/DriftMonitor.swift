@@ -3,8 +3,8 @@ import Observation
 
 /// Runs the Drift checks and keeps the last results, so the sidebar count is there
 /// at launch. Checks when Drift opens, on "Check now", and by itself at the interval
-/// set in Settings (once a day by default). Never edits a page: Report appends one
-/// line to the inbox, the way `report_change` does.
+/// set in Settings (once a day by default). Never edits a page: what is out of date goes to
+/// the inbox by itself (InboxSync), for the operator.
 struct DriftPageGroup: Identifiable, Hashable {
     var id: String
     var title: String
@@ -14,20 +14,22 @@ struct DriftPageGroup: Identifiable, Hashable {
 @MainActor
 @Observable
 final class DriftMonitor {
-    private(set) var results: [DriftResult] = []
+    /// The checks: lines' results.
+    private(set) var checkResults: [DriftResult] = []
+    /// Findings from the GitHub refresh (a page's latest release, repo or path no longer matching).
+    private(set) var repoResults: [DriftResult] = []
+    /// Everything Drift shows.
+    var results: [DriftResult] { checkResults + repoResults }
     private(set) var lastChecked: Date?
     private(set) var isChecking = false
     /// How long the last check took, for the overview.
     private(set) var lastDuration: TimeInterval?
-    private(set) var reportError: String?
 
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let probe: any DriftProbing
     @ObservationIgnored private var timer: Task<Void, Never>?
     /// Where the pages come from when the timer fires.
     @ObservationIgnored private var pagesProvider: (@MainActor () -> [DriftEvaluator.Page])?
-
-    static let agentName = "drift"
 
     init(defaults: UserDefaults = .standard, probe: any DriftProbing = DriftProbe()) {
         self.defaults = defaults
@@ -60,18 +62,9 @@ final class DriftMonitor {
 
     func results(forPage id: String) -> [DriftResult] { results.filter { $0.pageID == id } }
 
-    /// Whether an open inbox line already reports this claim.
-    func isReported(_ result: DriftResult, in reports: [InboxReport]) -> Bool {
-        reports.contains { !$0.handled && $0.page == InboxReport.oneLine(result.pageTitle) && $0.what == InboxReport.oneLine(result.reportWhat) }
-    }
-
-    func reportDate(_ result: DriftResult, in reports: [InboxReport]) -> Date? {
-        reports.first { !$0.handled && $0.page == InboxReport.oneLine(result.pageTitle) && $0.what == InboxReport.oneLine(result.reportWhat) }?.reportedDate
-    }
-
     // MARK: Checking
 
-    static func pages(from documents: [OpsDocument]) -> [DriftEvaluator.Page] {
+    nonisolated static func pages(from documents: [OpsDocument]) -> [DriftEvaluator.Page] {
         documents.filter { !$0.checks.isEmpty && !$0.isParked }.map { .init(id: $0.id, title: $0.title, checks: $0.checks) }
     }
 
@@ -83,7 +76,7 @@ final class DriftMonitor {
         let fresh = await Task.detached(priority: .utility) {
             DriftEvaluator.evaluate(pages: pages, probe: probe, now: started)
         }.value
-        results = DriftEvaluator.carryOver(fresh, from: results)
+        checkResults = DriftEvaluator.carryOver(fresh, from: checkResults)
         lastChecked = started
         lastDuration = Date().timeIntervalSince(started)
         isChecking = false
@@ -110,37 +103,11 @@ final class DriftMonitor {
         DriftInterval.fromStored(defaults.object(forKey: AppSettings.driftIntervalKey) as? Int ?? DriftInterval.default.rawValue)
     }
 
-    // MARK: Report
-
-    /// Appends one report line to `_inbox/reports.md`. Returns false and sets `reportError` when it cannot.
-    @discardableResult
-    func report(_ result: DriftResult, inboxURL: URL, at date: Date = Date()) -> Bool {
-        let time = Self.timeFormatter.string(from: result.checkedAt)
-        let line = InboxReport.line(agent: Self.agentName, page: result.pageTitle, what: result.reportWhat,
-                                    evidence: "\(result.source), checked \(time)", at: date)
-        do {
-            let fm = FileManager.default
-            try fm.createDirectory(at: inboxURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            if !fm.fileExists(atPath: inboxURL.path) {
-                try InboxReport.header.write(to: inboxURL, atomically: true, encoding: .utf8)
-            }
-            // Start on a fresh line if the file does not end with one.
-            let existing = try Data(contentsOf: inboxURL)
-            var text = line + "\n"
-            if let last = existing.last, last != UInt8(ascii: "\n") { text = "\n" + text }
-            let handle = try FileHandle(forWritingTo: inboxURL)
-            defer { try? handle.close() }
-            try handle.seekToEnd()
-            try handle.write(contentsOf: Data(text.utf8))
-            reportError = nil
-            return true
-        } catch {
-            reportError = "The report could not be filed: \(error.localizedDescription) The inbox folder may be locked; ops-lock lock opens it again."
-            return false
-        }
+    /// Called after each GitHub refresh with that refresh's findings.
+    func setRepoResults(_ fresh: [DriftResult]) {
+        repoResults = DriftEvaluator.carryOver(fresh, from: repoResults)
+        save()
     }
-
-    func clearReportError() { reportError = nil }
 
     static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -152,19 +119,21 @@ final class DriftMonitor {
 
     private struct Saved: Codable {
         var results: [DriftResult]
+        var repoResults: [DriftResult]?
         var lastChecked: Date?
         var duration: TimeInterval?
     }
 
     private func save() {
-        let saved = Saved(results: results, lastChecked: lastChecked, duration: lastDuration)
+        let saved = Saved(results: checkResults, repoResults: repoResults, lastChecked: lastChecked, duration: lastDuration)
         if let data = try? JSONEncoder().encode(saved) { defaults.set(data, forKey: AppSettings.driftResultsKey) }
     }
 
     private func restore() {
         guard let data = defaults.data(forKey: AppSettings.driftResultsKey),
               let saved = try? JSONDecoder().decode(Saved.self, from: data) else { return }
-        results = saved.results
+        checkResults = saved.results
+        repoResults = saved.repoResults ?? []
         lastChecked = saved.lastChecked
         lastDuration = saved.duration
     }
@@ -172,7 +141,7 @@ final class DriftMonitor {
     /// Results of pages that no longer exist, or no longer state checks, drop out
     /// when the folder changes, so the count never points at nothing.
     func prune(keeping pageIDs: Set<String>) {
-        let kept = results.filter { pageIDs.contains($0.pageID) }
-        if kept.count != results.count { results = kept; save() }
+        let kept = checkResults.filter { pageIDs.contains($0.pageID) }
+        if kept.count != checkResults.count { checkResults = kept; save() }
     }
 }

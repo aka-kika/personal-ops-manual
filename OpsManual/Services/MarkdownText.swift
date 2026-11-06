@@ -40,26 +40,6 @@ enum MarkdownText {
         return t.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Mirrors `draftFromMarkdown`: known keys become fields, unknown keys become properties,
-    /// title falls back to the first H1 then the file stem. id and dates are never copied.
-    static func draft(fromMarkdown raw: String, fileName: String) -> DocDraft {
-        let p = FrontmatterCodec.parse(raw)
-        let h1 = p.body.firstMatch(of: /(?m)^\s*#\s+(.+?)\s*$/).map { String($0.output.1) }
-        let stem = fileName
-            .replacing(/\.(md|markdown|txt)$/.ignoresCase(), with: "")
-            .replacing(/[-_]+/, with: " ")
-            .trimmingCharacters(in: .whitespaces)
-        var d = DocDraft()
-        d.title = p.value("title").flatMap { $0.isEmpty ? nil : $0 } ?? h1 ?? (stem.isEmpty ? "Untitled" : stem)
-        d.category = p.value("category") ?? ""
-        d.summary = p.value("summary") ?? ""
-        d.tags = p.tags
-        d.properties = p.fields.filter { !OpsDocument.knownKeys.contains($0.key) }
-            .map { DocProperty(key: $0.key, value: $0.value) }
-        d.body = p.body
-        return d
-    }
-
     /// The reader shows the title in its header, so a leading `# Title` line is dropped.
     static func stripLeadingTitle(_ body: String, title: String) -> String {
         guard let m = body.firstMatch(of: /^\s*#\s+(.+?)\s*\n+/) else { return body }

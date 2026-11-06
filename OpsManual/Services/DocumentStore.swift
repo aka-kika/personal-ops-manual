@@ -14,25 +14,9 @@ struct BacklinkRef: Identifiable, Hashable {
     let category: String
 }
 
-enum DocumentStoreError: LocalizedError {
-    case documentNotFound(id: String)
-    case invalidDocumentID(id: String)
-    case invalidPropertyKey(key: String)
-
-    var errorDescription: String? {
-        switch self {
-        case .documentNotFound(let id):
-            "No document with id \(id) is in the folder any more. It may have been renamed, moved or removed outside the app."
-        case .invalidDocumentID(let id):
-            "Document id \"\(id)\" is not allowed."
-        case .invalidPropertyKey(let key):
-            "Property key \"\(key)\" is reserved or invalid."
-        }
-    }
-}
-
-/// The folder is the source of truth. The store reads every `.md` with an `id`,
-/// writes atomically in the Node app's exact format, and reloads when the folder changes.
+/// The folder is the source of truth. The store reads every `.md` with an `id` and
+/// reloads when the folder changes. Since 2.4.0 the app only reads: pages change
+/// through the operator, and the only write is a Report/Send line in the inbox.
 @MainActor
 @Observable
 final class DocumentStore {
@@ -147,122 +131,6 @@ final class DocumentStore {
         watcher = FolderWatcher(url: folder) { [weak self] in self?.load() }
     }
 
-    @discardableResult
-    func create(_ draft: DocDraft) throws -> OpsDocument {
-        try ensureUnlocked()
-        try validateProperties(draft.properties)
-        let now = FrontmatterCodec.nowISO()
-        let title = FrontmatterCodec.singleLine(draft.title).trimmingCharacters(in: .whitespaces)
-        let category = FrontmatterCodec.singleLine(draft.category).trimmingCharacters(in: .whitespaces)
-        var doc = OpsDocument(
-            id: OpsDocument.makeID(),
-            title: title.isEmpty ? "Untitled" : title,
-            category: category.isEmpty ? "Uncategorized" : category,
-            summary: FrontmatterCodec.singleLine(draft.summary),
-            tags: draft.tags.map(FrontmatterCodec.singleLine),
-            createdAt: now,
-            updatedAt: now,
-            properties: draft.properties.map {
-                DocProperty(
-                    key: FrontmatterCodec.singleLine($0.key).trimmingCharacters(in: .whitespaces),
-                    value: FrontmatterCodec.singleLine($0.value))
-            },
-            body: draft.body)
-        let url = folder.appendingPathComponent(doc.fileName)
-        doc.filePath = url.path
-        try write(doc, to: url)
-        load()
-        return doc
-    }
-
-    /// Writes the new file first and only then removes the old one when the
-    /// name changed: a failed write must never cost the document on disk.
-    ///
-    /// The two URLs are compared by file identity, not by string. `fileURL(for:)`
-    /// gives the name actually on disk while `newURL` is the lowercase slug, so a
-    /// hand-named `Weird-Name-7.md` and its slug `weird-name-7.md` differ as strings
-    /// yet are the same directory entry on a case-insensitive volume — removing the
-    /// "old" one there would delete the file that was just written.
-    @discardableResult
-    func update(filePath: String, draft: DocDraft) throws -> OpsDocument {
-        try ensureUnlocked()
-        guard let existing = document(filePath: filePath) else {
-            throw DocumentStoreError.documentNotFound(id: filePath)
-        }
-        return try updateDocument(existing, draft: draft)
-    }
-
-    @discardableResult
-    func update(id: String, draft: DocDraft) throws -> OpsDocument {
-        try ensureUnlocked()
-        guard let existing = document(id: id) else { throw DocumentStoreError.documentNotFound(id: id) }
-        return try updateDocument(existing, draft: draft)
-    }
-
-    private func updateDocument(_ existing: OpsDocument, draft: DocDraft) throws -> OpsDocument {
-        try validateProperties(draft.properties)
-        let title = FrontmatterCodec.singleLine(draft.title).trimmingCharacters(in: .whitespaces)
-        let category = FrontmatterCodec.singleLine(draft.category).trimmingCharacters(in: .whitespaces)
-        var updated = existing
-        updated.title = title.isEmpty ? "Untitled" : title
-        updated.category = category.isEmpty ? "Uncategorized" : category
-        updated.summary = FrontmatterCodec.singleLine(draft.summary)
-        updated.tags = draft.tags.map(FrontmatterCodec.singleLine)
-        updated.properties = draft.properties.map {
-            DocProperty(
-                key: FrontmatterCodec.singleLine($0.key).trimmingCharacters(in: .whitespaces),
-                value: FrontmatterCodec.singleLine($0.value))
-        }
-        updated.body = draft.body
-        updated.updatedAt = FrontmatterCodec.nowISO()
-        let oldURL = fileURL(for: existing)
-        let candidateURL = folder.appendingPathComponent(updated.fileName)
-        let newURL: URL
-        if candidateURL != oldURL,
-           FileManager.default.fileExists(atPath: candidateURL.path),
-           !isSameFile(oldURL, candidateURL) {
-            newURL = oldURL
-        } else {
-            newURL = candidateURL
-        }
-        updated.filePath = newURL.path
-        try write(updated, to: newURL)
-        if oldURL != newURL, !isSameFile(oldURL, newURL) {
-            do {
-                try FileManager.default.removeItem(at: oldURL)
-            } catch {
-                try? FileManager.default.removeItem(at: newURL)
-                throw error
-            }
-        }
-        load()
-        return updated
-    }
-
-    func trash(filePath: String) throws {
-        try ensureUnlocked()
-        guard let doc = document(filePath: filePath) else { return }
-        try FileManager.default.trashItem(at: fileURL(for: doc), resultingItemURL: nil)
-        load()
-    }
-
-    func trash(id: String) throws {
-        try ensureUnlocked()
-        guard let doc = document(id: id) else { return }
-        try trash(filePath: fileURL(for: doc).path)
-    }
-
-    private func validateProperties(_ properties: [DocProperty]) throws {
-        for prop in properties {
-            let trimmed = prop.key.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty { continue }
-            if !FrontmatterCodec.isValidPropertyKey(prop.key) {
-                throw DocumentStoreError.invalidPropertyKey(key: trimmed)
-            }
-        }
-    }
-
-    /// Case-insensitive substring over title, category, tags, summary and body; snippet around the first body hit; sorted by title.
     func search(_ query: String) -> [SearchHit] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !q.isEmpty else { return [] }
@@ -303,41 +171,4 @@ final class DocumentStore {
             .map { BacklinkRef(id: $0.id, title: $0.title, category: $0.category) }
     }
 
-    /// True when both URLs resolve to the same file on disk. Identifiers are only
-    /// meaningful for files that exist, so a missing one answers false and leaves the
-    /// caller's own `oldURL != newURL` check in charge.
-    private func isSameFile(_ lhs: URL, _ rhs: URL) -> Bool {
-        guard let a = try? lhs.resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier,
-              let b = try? rhs.resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier
-        else { return false }
-        return a.isEqual(b)
-    }
-
-    /// True when the folder carries the macOS locked flag (`scripts/ops-lock.sh`).
-    var isLocked: Bool {
-        // FileManager, not URL.resourceValues: URLs cache resource values, and a lock set
-        // while the app runs must show up at once.
-        (try? FileManager.default.attributesOfItem(atPath: folder.path)[.immutable] as? Bool) == true
-    }
-
-    private func ensureUnlocked() throws {
-        if isLocked { throw LockedError() }
-    }
-
-    private func write(_ doc: OpsDocument, to url: URL) throws {
-        let parent = url.standardizedFileURL.deletingLastPathComponent().path
-        let root = folder.standardizedFileURL.path
-        guard parent == root, FrontmatterCodec.isValidID(doc.id) else {
-            throw DocumentStoreError.invalidDocumentID(id: doc.id)
-        }
-        let data = Data(FrontmatterCodec.serialize(doc).utf8)
-        try data.write(to: url, options: .atomic)
-    }
-}
-
-/// Thrown when a page change is tried while the folder is locked.
-struct LockedError: LocalizedError {
-    var errorDescription: String? {
-        "The manual is locked, so pages cannot change here. The operator unlocks it with ops-lock unlock (scripts/ops-lock.sh in the app repo)."
-    }
 }

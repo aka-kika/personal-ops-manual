@@ -207,30 +207,39 @@ more attributes as tables. No emojis. At most one `> [!warning]` or
 ## Checks (Drift)
 
 A page can list the facts this Mac can confirm, under `checks:` in its
-frontmatter, one per line. The app's Drift row compares each line with the
-Mac and lists the pages that no longer match; a reader's Report from there
-lands in the inbox like any `report_change` line. Add or update `checks:` when
-you verify a page; leave it out when nothing on the page is checkable here
-(a remote host, an account).
+frontmatter, one per line, and name its repo, folder and site. The app's Drift
+row compares them with the Mac and GitHub; what is out of date is written into
+the inbox by itself (see the inbox sections below). Add or update these lines
+when you verify a page; leave them out when nothing on the page is checkable
+here (a remote host).
 
 ```yaml
+repo: aka-kika/personal-ops-manual
+path: ~/_KIKA_MAIN/_INFRA/apps/ops-manual
+url: https://ops-manual.akakika.com
 checks:
-  - app "Personal Ops Manual" 2.3.0 notarized
+  - app "Personal Ops Manual" 2.4.0 notarized
   - mcp personal-ops-manual
   - port 4319 node
   - launchd com.akakika.socials running
   - cli gh 2.103.3
 ```
 
+- `repo:` the GitHub repo (owner/name), on GitHub, MCP and CLI tool pages: the
+  page menu's Open Repo, and the GitHub view's data. Without it the app tries
+  the page's "Source:" link, then the title.
+- `path:` the repo's folder on this Mac: uncommitted and unpushed work, and the
+  repo total in Drift.
+- `url:` the site of an Accounts or Domains page: the page menu's Open Site.
 - `app <name or path> [version] [notarized]`: `/Applications/<name>.app`.
 - `mcp <server>`: wired in `~/.claude.json` (user or a project).
 - `port <number> [process]`: something listens there, by that process.
 - `launchd <label> [running]`: loaded in the user's launchd (and running).
 - `cli <name> [version]`: found on the usual PATH folders, `--version`.
 
-Quote a name with spaces. The version is the one on the page; when it
-changes, update the page's text and its `checks:` line together. Pages with
-`status: parked` or `archived` are not checked.
+Quote a name with spaces. When a version changes, update the page's text and
+its `checks:` line together. Pages with `status: parked` or `archived` are not
+checked. A GitHub page's title is the repo or app name, without "(release)".
 
 ## New page
 

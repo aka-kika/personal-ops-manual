@@ -21,6 +21,8 @@ enum AppSettings {
     static let driftIntervalKey = "driftInterval"
     /// The last Drift check, so the sidebar count is there at launch.
     static let driftResultsKey = "driftResults"
+    /// The last GitHub refresh (only repos a page names).
+    static let githubSnapshotKey = "githubSnapshot"
 
     /// Where pages live until the user picks a folder in Settings.
     static var defaultDocumentsPath: String {

@@ -1,32 +1,26 @@
 import SwiftUI
 import AppKit
 
+/// Menu bar. The app only reads (2.4.0): no New Document, no Edit.
 struct OpsCommands: Commands {
     @Bindable var state: AppState
     let store: DocumentStore
 
     var body: some Commands {
-        CommandGroup(replacing: .newItem) {
-            Button("New Document") { state.editorTarget = .new(category: state.categoryForNewDocument()) }
-                .keyboardShortcut("n", modifiers: .command)
-        }
+        CommandGroup(replacing: .newItem) {}
         CommandMenu("Document") {
-            Button("Edit") {
-                if let id = state.selectedDocID, let doc = store.document(id: id) {
-                    state.editorTarget = .edit(id: doc.id, filePath: doc.filePath)
-                }
+            Button("Open in Default App") {
+                if let doc = selected { NSWorkspace.shared.open(store.fileURL(for: doc)) }
             }
-                .keyboardShortcut("e", modifiers: .command)
-                .disabled(state.selectedDocID == nil)
+            .keyboardShortcut("o", modifiers: [.command, .shift])
+            .disabled(state.selectedDocID == nil)
             Button("Show in Finder") {
-                if let id = state.selectedDocID, let doc = store.document(id: id) {
-                    NSWorkspace.shared.activateFileViewerSelecting([store.fileURL(for: doc)])
-                }
+                if let doc = selected { NSWorkspace.shared.activateFileViewerSelecting([store.fileURL(for: doc)]) }
             }
             .disabled(state.selectedDocID == nil)
             Divider()
-            Button("Search…") { state.isSearchPresented = true }.keyboardShortcut("k", modifiers: .command)
-            Button("Reload Folder") { store.load() }.keyboardShortcut("r", modifiers: .command)
+            Button("Search") { state.isSearchPresented = true }.keyboardShortcut("k", modifiers: .command)
+            Button("Refresh") { store.load() }.keyboardShortcut("r", modifiers: .command)
         }
         CommandGroup(after: .help) {
             Button("What's New in Personal Ops Manual") {
@@ -35,4 +29,6 @@ struct OpsCommands: Commands {
             .disabled(WhatsNew.notes(for: WhatsNew.currentVersion) == nil)
         }
     }
+
+    private var selected: OpsDocument? { state.selectedDocID.flatMap { store.document(id: $0) } }
 }

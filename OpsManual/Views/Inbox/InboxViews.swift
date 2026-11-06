@@ -30,12 +30,17 @@ struct InboxListView: View {
             if reports.isEmpty {
                 EmptyState(text: "Nothing waiting for the operator")
             } else {
+                let outOfDate = reports.filter(\.outOfDate)
+                let readers = reports.filter { !$0.outOfDate }
                 ScrollView {
-                    LazyVStack(spacing: 1) {
-                        ForEach(reports) { report in
-                            InboxRow(report: report, pageTitle: store.document(forReportPage: report.page)?.title,
-                                     selected: state.inboxReportID == report.id)
-                                .onTapGesture { state.inboxReportID = report.id }
+                    LazyVStack(alignment: .leading, spacing: 1) {
+                        if !outOfDate.isEmpty {
+                            GroupedSection(title: "OUT OF DATE", count: outOfDate.count)
+                            rows(outOfDate)
+                        }
+                        if !readers.isEmpty {
+                            GroupedSection(title: "FROM READERS", count: readers.count)
+                            rows(readers)
                         }
                     }
                     .padding(.horizontal, 6)
@@ -46,6 +51,14 @@ struct InboxListView: View {
             }
         }
         .background(OpsTheme.canvas)
+    }
+
+    private func rows(_ list: [InboxReport]) -> some View {
+        ForEach(list) { report in
+            InboxRow(report: report, pageTitle: store.document(forReportPage: report.page)?.title,
+                     selected: state.inboxReportID == report.id)
+                .onTapGesture { state.inboxReportID = report.id }
+        }
     }
 }
 
@@ -134,7 +147,9 @@ struct InboxDetailView: View {
                     }
                     DriftNote(symbol: "tray", text: report.malformed
                         ? "This line was typed into the inbox by hand, not filed with report_change. The operator checks it like a report, then deletes it."
-                        : "Read only. The operator applies what is true to the page, then ticks the line in _inbox/reports.md.")
+                        : report.outOfDate
+                            ? "Written by the app's check. The operator checks the fact, updates the page and removes the line; once the fact holds again the line goes away by itself."
+                            : "Read only. The operator applies what is true to the page, then ticks the line in _inbox/reports.md.")
                 }
                 .frame(maxWidth: 640, alignment: .leading)
                 .padding(.horizontal, OpsChrome.columnHeaderHorizontalPadding)
@@ -150,7 +165,7 @@ struct InboxDetailView: View {
 
     private func subtitle(_ report: InboxReport) -> String {
         guard !report.malformed else { return "Not in the report_change shape" }
-        var parts = ["Reported by \(report.agent)"]
+        var parts = [report.outOfDate ? "Found by the \(report.agent) check" : "Reported by \(report.agent)"]
         if let date = report.reportedDate { parts.append(ReaderDate.format(date)) }
         return parts.joined(separator: " · ")
     }

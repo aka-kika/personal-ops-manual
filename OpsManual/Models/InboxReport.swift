@@ -17,6 +17,8 @@ struct InboxReport: Identifiable, Hashable, Sendable {
     var lineNumber: Int
     /// A `- [ ]` line that does not have the report_change shape (typed by hand).
     var malformed = false
+    /// Written by the app's check ("## Out of date: ..." sections), not by a reader.
+    var outOfDate = false
 
     var id: Int { lineNumber }
 
@@ -38,8 +40,10 @@ struct InboxReport: Identifiable, Hashable, Sendable {
     /// with `malformed` set and the whole line in `what`.
     static func parse(_ text: String) -> [InboxReport] {
         var out: [InboxReport] = []
+        var inOutOfDate = false
         for (index, raw) in text.components(separatedBy: "\n").enumerated() {
             let line = raw.trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
+            if line.hasPrefix("## ") { inOutOfDate = line.hasPrefix("## Out of date"); continue }
             guard line.hasPrefix("- [") else { continue }
             let ns = line as NSString
             if let m = pattern.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) {
@@ -49,13 +53,13 @@ struct InboxReport: Identifiable, Hashable, Sendable {
                 }
                 out.append(InboxReport(
                     handled: group(1) == "x", reportedAt: group(2), agent: group(3), page: group(4),
-                    what: group(5), evidence: group(6), line: line, lineNumber: index))
+                    what: group(5), evidence: group(6), line: line, lineNumber: index, outOfDate: inOutOfDate))
             } else if line.hasPrefix("- [ ]") || line.hasPrefix("- [x]") || line.hasPrefix("- [X]") {
                 let handled = !line.hasPrefix("- [ ]")
                 let rest = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
                 out.append(InboxReport(
                     handled: handled, reportedAt: "", agent: "", page: "", what: rest, evidence: "",
-                    line: line, lineNumber: index, malformed: true))
+                    line: line, lineNumber: index, malformed: true, outOfDate: inOutOfDate))
             }
         }
         return out
@@ -66,6 +70,32 @@ struct InboxReport: Identifiable, Hashable, Sendable {
         var line = "- [ ] \(stampFormatter.string(from: date)) · \(oneLine(agent)) · page: \(oneLine(page)) · \(oneLine(what))"
         if let evidence, !oneLine(evidence).isEmpty { line += " · evidence: \(oneLine(evidence))" }
         return line
+    }
+
+    /// Appends one line to the inbox file, creating it with the header when missing,
+    /// and starting on a fresh line if the file does not end with one.
+    static func append(_ line: String, to inboxURL: URL) throws {
+        let fm = FileManager.default
+        try fm.createDirectory(at: inboxURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if !fm.fileExists(atPath: inboxURL.path) {
+            try header.write(to: inboxURL, atomically: true, encoding: .utf8)
+        }
+        let existing = try Data(contentsOf: inboxURL)
+        var text = line + "\n"
+        if let last = existing.last, last != UInt8(ascii: "\n") { text = "\n" + text }
+        let handle = try FileHandle(forWritingTo: inboxURL)
+        defer { try? handle.close() }
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data(text.utf8))
+    }
+
+    static func appendFailure(_ error: Error) -> String {
+        "The report could not be filed: \(error.localizedDescription) The inbox folder may be locked; ops-lock lock opens it again."
+    }
+
+    /// Whether an open line already reports this page and claim.
+    static func isOpen(page: String, what: String, in reports: [InboxReport]) -> Bool {
+        reports.contains { !$0.handled && $0.page == oneLine(page) && $0.what == oneLine(what) }
     }
 
     static func oneLine(_ value: String) -> String {
