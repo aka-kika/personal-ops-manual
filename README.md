@@ -80,6 +80,34 @@ While the folder is locked the app is a reader too: New, Edit and Move to
 Trash explain that the manual is locked. `list_reports` also returns lines
 someone typed into the inbox by hand under `malformed`, so none go unseen.
 
+## Drift: does the page still match the Mac?
+
+A page can list the facts this Mac can confirm under `checks:` in its
+frontmatter, one per line:
+
+```yaml
+checks:
+  - app "Personal Ops Manual" 2.3.0 notarized
+  - mcp personal-ops-manual
+  - port 4319 node
+  - launchd com.akakika.socials running
+  - cli gh 2.103.3
+```
+
+The Drift row in the sidebar checks them (installed app version and
+notarization, MCP servers in `~/.claude.json`, listening ports, launch jobs,
+CLI versions) and lists the pages that no longer match, with a score and what
+drags it down. Each check runs one fixed program with fixed arguments; the
+page text never reaches a shell. Report adds one line to the inbox, in the
+same shape as `report_change`; Drift never edits a page. It checks when you
+open it, on Check now, and by itself once a day (Settings > General > Drift).
+The score card follows the Health page of
+[Cortex](https://github.com/envibagus/cortex) (MIT); ideas only, no code
+copied.
+
+The Inbox row shows the readers' reports inside the app, with a jump to
+their page. Pages with `status: parked` or `archived` sit under one Parked row.
+
 ## Install
 
 ```bash

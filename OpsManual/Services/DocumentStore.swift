@@ -39,8 +39,11 @@ final class DocumentStore {
     private(set) var folder: URL
     private(set) var documents: [OpsDocument] = []
     private(set) var loadError: String?
-    /// Open lines in `_inbox/reports.md`, the reports readers filed through the MCP.
-    private(set) var inboxOpenCount = 0
+    /// Every checkbox line in `_inbox/reports.md`: the reports readers filed through the MCP.
+    private(set) var inboxReports: [InboxReport] = []
+    /// Open lines in the inbox.
+    var inboxOpenCount: Int { inboxReports.filter { !$0.handled }.count }
+    var openInboxReports: [InboxReport] { inboxReports.filter { !$0.handled } }
     @ObservationIgnored private var inboxWatcher: FolderWatcher?
     @ObservationIgnored private var watcher: FolderWatcher?
     @ObservationIgnored private let shouldWatch: Bool
@@ -52,9 +55,13 @@ final class DocumentStore {
         startWatching()
     }
 
+    /// Pages that are not parked or archived: what the category lists show.
+    var activeDocuments: [OpsDocument] { documents.filter { !$0.isParked } }
+    var parkedDocuments: [OpsDocument] { documents.filter(\.isParked) }
+
     var categories: [(name: String, count: Int)] {
         var counts: [String: Int] = [:]
-        for doc in documents { counts[doc.category, default: 0] += 1 }
+        for doc in activeDocuments { counts[doc.category, default: 0] += 1 }
         return counts.keys.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
             .map { ($0, counts[$0]!) }
     }
@@ -103,7 +110,7 @@ final class DocumentStore {
                 return $0.filePath < $1.filePath
             }
             loadError = nil
-            inboxOpenCount = countOpenReports()
+            inboxReports = readInbox()
             if shouldWatch, inboxWatcher?.isActive != true {
                 let inboxDir = folder.appendingPathComponent(Self.inboxFolderName)
                 if FileManager.default.fileExists(atPath: inboxDir.path) {
@@ -120,9 +127,16 @@ final class DocumentStore {
     static let inboxFileName = "reports.md"
     var inboxFileURL: URL { folder.appendingPathComponent(Self.inboxFolderName).appendingPathComponent(Self.inboxFileName) }
 
-    private func countOpenReports() -> Int {
-        guard let raw = try? String(contentsOf: inboxFileURL, encoding: .utf8) else { return 0 }
-        return raw.split(separator: "\n").filter { $0.hasPrefix("- [ ] ") }.count
+    private func readInbox() -> [InboxReport] {
+        guard let raw = try? String(contentsOf: inboxFileURL, encoding: .utf8) else { return [] }
+        return InboxReport.parse(raw)
+    }
+
+    /// The page a report names: by id first, then by title (case-insensitive).
+    func document(forReportPage page: String) -> OpsDocument? {
+        let key = page.trimmingCharacters(in: .whitespaces)
+        if let doc = document(id: key) { return doc }
+        return documents.first { $0.title.caseInsensitiveCompare(key) == .orderedSame }
     }
 
     private func startWatching() {

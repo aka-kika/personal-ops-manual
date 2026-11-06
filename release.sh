@@ -71,8 +71,10 @@ for arg in "$@"; do
       echo "Installed to /Applications (build copies unregistered, Dock refreshed)"
       ;;
     --publish)
-      gh release create "v$VERSION" "$ZIP" --title "Personal Ops Manual $VERSION" \
-        --notes "Notarized Developer ID build. Unzip and drop into /Applications. macOS 26 or newer." \
+      NOTES="docs/release-notes/$VERSION.md"
+      if [[ -f "$NOTES" ]]; then NOTES_ARGS=(--notes-file "$NOTES")
+      else NOTES_ARGS=(--notes "Notarized Developer ID build. Unzip and drop into /Applications. macOS 26 or newer."); fi
+      gh release create "v$VERSION" "$ZIP" --title "Personal Ops Manual $VERSION" "${NOTES_ARGS[@]}" \
         || echo "gh release create failed (does v$VERSION already exist?)"
       # Homebrew cask: OPS_TAP_DIR in release.env points at a local clone of the
       # tap that serves the cask; version and sha256 are rewritten and pushed.

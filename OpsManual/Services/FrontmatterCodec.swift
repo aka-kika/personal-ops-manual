@@ -16,6 +16,8 @@ enum FrontmatterCodec {
     struct Parsed {
         var fields: [(key: String, value: String)] = []
         var tags: [String] = []
+        /// Keys with a block list under them (`key:` then `  - item` lines), tags aside.
+        var lists: [(key: String, items: [String])] = []
         var body: String = ""
         func value(_ key: String) -> String? { fields.first { $0.key == key }?.value }
     }
@@ -44,13 +46,26 @@ enum FrontmatterCodec {
         let block = String(text[afterOpen..<closeRange.lowerBound])
         var parsed = Parsed()
         var collectingTags = false
+        /// A custom key written with an empty value: list items may follow it.
+        var openListKey: String?
         for line in block.split(separator: "\n", omittingEmptySubsequences: false) {
             let line = String(line)
             if collectingTags, let item = listItem(line) {
                 parsed.tags.append(unquote(item))
                 continue
             }
+            if let key = openListKey, let item = listItem(line) {
+                if let index = parsed.lists.firstIndex(where: { $0.key == key }) {
+                    parsed.lists[index].items.append(unquote(item))
+                } else {
+                    // The first item turns the empty scalar into a list.
+                    parsed.fields.removeAll { $0.key == key && $0.value.isEmpty }
+                    parsed.lists.append((key: key, items: [unquote(item)]))
+                }
+                continue
+            }
             collectingTags = false
+            openListKey = nil
             guard let colon = line.firstIndex(of: ":") else { continue }
             let key = line[..<colon].trimmingCharacters(in: .whitespaces)
             let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
@@ -58,6 +73,14 @@ enum FrontmatterCodec {
                 if value.isEmpty || value == "[]" { collectingTags = true; continue }
                 let inner = value.dropFirst(value.hasPrefix("[") ? 1 : 0).dropLast(value.hasSuffix("]") ? 1 : 0)
                 parsed.tags = inner.split(separator: ",").map { unquote($0.trimmingCharacters(in: .whitespaces)) }.filter { !$0.isEmpty }
+                continue
+            }
+            if value.isEmpty, !OpsDocument.knownKeys.contains(key) {
+                openListKey = key
+            }
+            if OpsDocument.listKeys.contains(key) {
+                // `checks: one line` is read as a list of one; `checks:` waits for items.
+                if !value.isEmpty, value != "[]" { parsed.lists.append((key: key, items: [unquote(value)])) }
                 continue
             }
             parsed.fields.append((key: key, value: unquote(value)))
@@ -76,6 +99,11 @@ enum FrontmatterCodec {
     }
 
     static func isValidPropertyKey(_ key: String) -> Bool {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        return isValidListKey(trimmed) && !OpsDocument.listKeys.contains(trimmed)
+    }
+
+    static func isValidListKey(_ key: String) -> Bool {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         return !trimmed.isEmpty
             && !OpsDocument.knownKeys.contains(trimmed)
@@ -109,7 +137,8 @@ enum FrontmatterCodec {
             createdAt: p.value("createdAt") ?? fallbackDate,
             updatedAt: p.value("updatedAt") ?? fallbackDate,
             properties: props,
-            body: p.body)
+            body: p.body,
+            listProperties: p.lists.map { DocListProperty(key: $0.key, items: $0.items) })
     }
 
     static func serialize(_ doc: OpsDocument) -> String {
@@ -120,7 +149,14 @@ enum FrontmatterCodec {
             .filter { isValidPropertyKey($0.key) && !singleLine($0.value).trimmingCharacters(in: .whitespaces).isEmpty }
             .map { "\($0.key.trimmingCharacters(in: .whitespacesAndNewlines)): \(escape($0.value))" }
             .joined(separator: "\n")
-        let customBlock = custom.isEmpty ? "" : custom + "\n"
+        let lists = doc.listProperties
+            .filter { isValidListKey($0.key) && !$0.items.isEmpty }
+            .map { list in
+                "\(list.key.trimmingCharacters(in: .whitespacesAndNewlines)):\n"
+                    + list.items.map { "  - \(listItemText($0))" }.joined(separator: "\n")
+            }
+            .joined(separator: "\n")
+        let customBlock = (custom.isEmpty ? "" : custom + "\n") + (lists.isEmpty ? "" : lists + "\n")
         return """
         ---
         title: \(escape(doc.title))
@@ -142,6 +178,22 @@ enum FrontmatterCodec {
         let special: Set<Character> = [":", "#", "\n", "[", "]", "{", "}", ",", "\"", "'"]
         guard clean.contains(where: { special.contains($0) }) else { return clean }
         return "\"" + clean.replacingOccurrences(of: "\"", with: "\\\"") + "\""
+    }
+
+    /// A list item is written as it was typed (`app "Personal Ops Manual" 2.2.5`
+    /// stays readable) unless it would read back differently; then it is quoted.
+    static func listItemText(_ value: String) -> String {
+        let clean = singleLine(value).trimmingCharacters(in: .whitespaces)
+        let indicators: Set<Character> = ["\"", "'", "[", "]", "{", "}", "&", "*", "!", "|", ">", "%", "@", "`", "#", "-", "?", ":", ","]
+        let risky = clean.isEmpty
+            || indicators.contains(clean.first!)
+            || clean.contains(": ") || clean.hasSuffix(":")
+            || clean.contains(" #")
+        return risky ? escapeAlways(clean) : clean
+    }
+
+    private static func escapeAlways(_ clean: String) -> String {
+        "\"" + clean.replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 
     private static func listItem(_ line: String) -> String? {

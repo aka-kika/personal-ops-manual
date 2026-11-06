@@ -46,6 +46,14 @@ struct SettingsView: View {
                         .font(OpsTheme.metaFont).foregroundStyle(.secondary)
                     Toggle("Show the Frontmatter section as raw YAML instead of rows", isOn: $showYAML)
                 }
+                Section {
+                    LabeledContent("Check pages") { DriftIntervalSlider() }
+                } header: {
+                    Text("Drift")
+                } footer: {
+                    Text("Opening Drift and Check now check right away. Drift compares each page's checks: lines with this Mac and never edits a page.")
+                        .font(OpsTheme.metaFont).foregroundStyle(.secondary)
+                }
             }
             .formStyle(.grouped)
             .tabItem { Label("General", systemImage: "gearshape") }
@@ -202,5 +210,65 @@ private struct AboutLink: View {
             Image(name).renderingMode(.template).resizable().interpolation(.high)
                 .frame(width: 12, height: 12)
         }
+    }
+}
+
+
+/// How often Drift checks by itself: the same kind of slider as mcpock's "Check servers".
+/// Dots for the stops, the stop's name beside it, Manual at the right end. The knob
+/// follows the pointer and snaps to the nearest stop on release, which is when it saves.
+private struct DriftIntervalSlider: View {
+    @AppStorage(AppSettings.driftIntervalKey) private var intervalRaw = DriftInterval.default.rawValue
+    @State private var dragPosition: Double?
+    @State private var isDragging = false
+
+    private var stored: DriftInterval { DriftInterval.fromStored(intervalRaw) }
+    private var shown: DriftInterval { dragPosition.map(DriftInterval.nearest(toSliderPosition:)) ?? stored }
+
+    var body: some View {
+        let stops = Double(DriftInterval.allCases.count - 1)
+        HStack(spacing: 10) {
+            Slider(
+                value: Binding(
+                    get: { dragPosition ?? Double(stored.sliderIndex) },
+                    set: { moved(to: $0) }),
+                in: 0...stops,
+                label: { Text("Check pages") },
+                ticks: {
+                    SliderTickContentForEach(DriftInterval.allCases.map { Double($0.sliderIndex) }, id: \.self) { position in
+                        SliderTick(position)
+                    }
+                },
+                onEditingChanged: { editing in
+                    isDragging = editing
+                    if !editing, let position = dragPosition {
+                        save(DriftInterval.nearest(toSliderPosition: position))
+                        withAnimation(.easeOut(duration: 0.15)) { dragPosition = nil }
+                    }
+                })
+                .labelsHidden()
+                .tint(.secondary)
+                .frame(width: 180)
+                .accessibilityValue(shown.title)
+            Text(shown.title)
+                .font(.system(size: 12).monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 52, alignment: .trailing)
+        }
+        .fixedSize()
+    }
+
+    /// A drag only moves the knob; keyboard and VoiceOver steps move one whole stop and save.
+    private func moved(to position: Double) {
+        if isDragging || NSEvent.pressedMouseButtons & 1 != 0 {
+            dragPosition = position
+            return
+        }
+        dragPosition = nil
+        save(DriftInterval.stepped(from: stored, toward: position))
+    }
+
+    private func save(_ stop: DriftInterval) {
+        if stop.rawValue != intervalRaw { intervalRaw = stop.rawValue }
     }
 }

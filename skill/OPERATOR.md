@@ -205,6 +205,34 @@ recover. Bullets over prose; commands in fenced blocks; things with two or
 more attributes as tables. No emojis. At most one `> [!warning]` or
 `> [!danger]` per page, only when missing it is dangerous.
 
+## Checks (Drift)
+
+A page can list the facts this Mac can confirm, under `checks:` in its
+frontmatter, one per line. The app's Drift row compares each line with the
+Mac and lists the pages that no longer match; a reader's Report from there
+lands in the inbox like any `report_change` line. Add or update `checks:` when
+you verify a page; leave it out when nothing on the page is checkable here
+(a remote host, an account).
+
+```yaml
+checks:
+  - app "Personal Ops Manual" 2.3.0 notarized
+  - mcp personal-ops-manual
+  - port 4319 node
+  - launchd com.akakika.socials running
+  - cli gh 2.103.3
+```
+
+- `app <name or path> [version] [notarized]`: `/Applications/<name>.app`.
+- `mcp <server>`: wired in `~/.claude.json` (user or a project).
+- `port <number> [process]`: something listens there, by that process.
+- `launchd <label> [running]`: loaded in the user's launchd (and running).
+- `cli <name> [version]`: found on the usual PATH folders, `--version`.
+
+Quote a name with spaces. The version is the one on the page; when it
+changes, update the page's text and its `checks:` line together. Pages with
+`status: parked` or `archived` are not checked.
+
 ## New page
 
 - File name: `<slug>-<id>.md`. Slug: title lowercased, runs of anything

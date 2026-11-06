@@ -5,6 +5,7 @@ import AppKit
 struct OpsManualApp: App {
     @State private var store: DocumentStore
     @State private var state = AppState()
+    @State private var drift = DriftMonitor()
     @AppStorage(AppSettings.appearanceKey) private var appearanceRaw = AppearancePreference.system.rawValue
 
     init() {
@@ -15,7 +16,7 @@ struct OpsManualApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(store: store, state: state)
+            ContentView(store: store, state: state, drift: drift)
                 .preferredColorScheme((AppearancePreference(rawValue: appearanceRaw) ?? .system).colorScheme)
         }
         .windowStyle(.hiddenTitleBar)

@@ -5,6 +5,13 @@ struct DocProperty: Hashable, Sendable {
     var value: String
 }
 
+/// A frontmatter key whose value is a YAML list (`checks:` and any other list a
+/// hand edit adds). Kept whole so saving a page never drops it.
+struct DocListProperty: Hashable, Sendable {
+    var key: String
+    var items: [String]
+}
+
 struct OpsDocument: Identifiable, Hashable, Sendable {
     var id: String
     var title: String
@@ -16,10 +23,19 @@ struct OpsDocument: Identifiable, Hashable, Sendable {
     var properties: [DocProperty]
     var body: String
     var filePath: String = ""
+    var listProperties: [DocListProperty] = []
 
     static let knownKeys: Set<String> = ["title", "category", "tags", "createdAt", "updatedAt", "id", "summary"]
+    /// Keys that are always lists, even when a hand edit wrote one value on the key's line.
+    static let listKeys: Set<String> = ["checks"]
+
+    /// The Drift lines of this page (`checks:` in the frontmatter), one fact each.
+    var checks: [String] { listProperties.first { $0.key == "checks" }?.items ?? [] }
 
     var icon: String { properties.first { $0.key == "icon" }?.value ?? "" }
+    var status: String { properties.first { $0.key == "status" }?.value ?? "" }
+    /// `status: parked` or `archived`: kept on disk and in search, out of the category lists.
+    var isParked: Bool { ["parked", "archived"].contains(status.trimmingCharacters(in: .whitespaces).lowercased()) }
     var updatedDate: Date { FrontmatterCodec.isoFormatter.date(from: updatedAt) ?? .distantPast }
     var createdDate: Date { FrontmatterCodec.isoFormatter.date(from: createdAt) ?? .distantPast }
     var fileName: String { "\(Self.slugify(title))-\(Self.sanitizeID(id)).md" }

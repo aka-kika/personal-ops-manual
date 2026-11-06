@@ -129,3 +129,70 @@ final class FrontmatterCodecTests: XCTestCase {
         XCTAssertTrue(failures.isEmpty, "Not byte-identical: \(failures)")
     }
 }
+
+/// Drift's `checks:` list (2.3.0): read, kept on save, and never lost to the editor.
+final class FrontmatterChecksTests: XCTestCase {
+    let page = """
+    ---
+    title: Personal Ops Manual
+    category: Agents
+    tags:
+      - ops
+    createdAt: 2026-09-13T13:30:00.000Z
+    updatedAt: 2026-11-06T00:34:34.000Z
+    id: mtzs3wtc-abc123
+    status: active
+    checks:
+      - app "Personal Ops Manual" 2.3.0 notarized
+      - mcp personal-ops-manual
+      - port 4319 node
+    ---
+
+    Body.
+    """
+
+    func testChecksAreReadAndRoundTripByteIdentical() throws {
+        let doc = try XCTUnwrap(FrontmatterCodec.document(from: page))
+        XCTAssertEqual(doc.checks, [#"app "Personal Ops Manual" 2.3.0 notarized"#, "mcp personal-ops-manual", "port 4319 node"])
+        XCTAssertEqual(doc.properties.map(\.key), ["status"])
+        XCTAssertEqual(FrontmatterCodec.serialize(doc), page)
+    }
+
+    @MainActor
+    func testSavingAnEditKeepsChecks() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ops-checks-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try page.write(to: dir.appendingPathComponent("personal-ops-manual-mtzs3wtc-abc123.md"), atomically: true, encoding: .utf8)
+        let store = DocumentStore(folder: dir, watch: false)
+        let doc = try XCTUnwrap(store.document(id: "mtzs3wtc-abc123"))
+        var draft = DocDraft(document: doc)
+        draft.body = "Changed body."
+        try store.update(id: doc.id, draft: draft)
+        let saved = try String(contentsOf: store.fileURL(for: try XCTUnwrap(store.document(id: doc.id))), encoding: .utf8)
+        XCTAssertTrue(saved.contains("checks:\n  - app \"Personal Ops Manual\" 2.3.0 notarized\n  - mcp personal-ops-manual\n  - port 4319 node\n"))
+        XCTAssertTrue(saved.contains("Changed body."))
+        XCTAssertEqual(store.document(id: doc.id)?.checks.count, 3)
+    }
+
+    func testOtherListsAreKeptAndEmptyScalarsStayScalars() throws {
+        let raw = page.replacingOccurrences(of: "status: active\n", with: "status: active\naliases:\n  - pom\n  - ops\nnote:\n")
+        let doc = try XCTUnwrap(FrontmatterCodec.document(from: raw))
+        XCTAssertEqual(doc.listProperties.map(\.key), ["aliases", "checks"])
+        XCTAssertEqual(doc.properties.map(\.key), ["status", "note"])
+        let out = FrontmatterCodec.serialize(doc)
+        XCTAssertTrue(out.contains("aliases:\n  - pom\n  - ops\n"))
+        XCTAssertEqual(FrontmatterCodec.document(from: out)?.listProperties, doc.listProperties)
+    }
+
+    func testOneLineChecksAndRiskyItems() throws {
+        let raw = page.replacingOccurrences(of: "checks:\n  - app \"Personal Ops Manual\" 2.3.0 notarized\n  - mcp personal-ops-manual\n  - port 4319 node\n", with: "checks: port 4340\n")
+        XCTAssertEqual(FrontmatterCodec.document(from: raw)?.checks, ["port 4340"])
+        // An item YAML would read differently is quoted, and reads back the same.
+        XCTAssertEqual(FrontmatterCodec.listItemText("port 4319 node"), "port 4319 node")
+        XCTAssertEqual(FrontmatterCodec.listItemText("a: b"), "\"a: b\"")
+        XCTAssertEqual(FrontmatterCodec.listItemText("\"quoted\" start"), "\"\\\"quoted\\\" start\"")
+        // `checks` cannot be added as a one-line property in the editor.
+        XCTAssertFalse(FrontmatterCodec.isValidPropertyKey("checks"))
+    }
+}

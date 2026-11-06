@@ -4,6 +4,7 @@ import AppKit
 struct SidebarView: View {
     @Bindable var store: DocumentStore
     @Bindable var state: AppState
+    var drift: DriftMonitor
     @Environment(\.openSettings) private var openSettings
     @State private var hoveringCategories = false
 
@@ -13,16 +14,29 @@ struct SidebarView: View {
                 HeaderChromeButton(systemImage: "magnifyingglass", help: "Search") { state.isSearchPresented = true }
                 HeaderChromeButton(systemImage: "gearshape", help: "Settings") { openSettings() }
             } title: {
-                navRow(.all, label: "All Documents", font: OpsTheme.titleFont, icon: nil, count: store.documents.count)
+                navRow(.all, label: "All Documents", font: OpsTheme.titleFont, icon: nil, count: store.activeDocuments.count)
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     navRow(.recent, label: "Recent", font: OpsTheme.rowFont, icon: .symbol("clock"), count: nil)
-                    inboxRow
+                    navRow(.inbox, label: "Inbox", font: OpsTheme.rowFont, icon: .symbol("tray"),
+                           count: store.inboxOpenCount > 0 ? store.inboxOpenCount : nil)
+                        .help("Reports from readers, in _inbox/reports.md")
+                    navRow(.drift, label: "Drift", font: OpsTheme.rowFont, icon: .symbol("gauge.with.dots.needle.67percent"),
+                           count: drift.driftedPages.isEmpty ? nil : drift.driftedPages.count)
+                        .help("Pages whose claims no longer match this Mac")
                     sectionHeader
                     ForEach(store.categories, id: \.name) { cat in
                         navRow(.category(cat.name), label: cat.name, font: OpsTheme.rowFont,
                                icon: CategoryIcons.icon(for: cat.name), count: cat.count)
+                    }
+                    if !store.parkedDocuments.isEmpty {
+                        // Parked and archived pages: one quiet row at the bottom.
+                        navRow(.parked, label: "Parked", font: OpsTheme.rowFont, icon: .symbol("archivebox"),
+                               count: store.parkedDocuments.count)
+                            .opacity(state.selection == .parked ? 1 : 0.6)
+                            .padding(.top, 10)
+                            .help("Pages with status parked or archived")
                     }
                 }
                 .padding(.horizontal, 8)
@@ -31,34 +45,6 @@ struct SidebarView: View {
             .hidesTopScrollEdgeEffect()
         }
         .background(OpsTheme.sidebarCanvas)
-    }
-
-    /// Reports readers filed through the MCP. Opens the inbox file in its editor;
-    /// the operator applies what is true and ticks the lines.
-    private var inboxRow: some View {
-        Button {
-            let url = store.inboxFileURL
-            if FileManager.default.fileExists(atPath: url.path) {
-                NSWorkspace.shared.open(url)
-            } else {
-                NSWorkspace.shared.activateFileViewerSelecting([url.deletingLastPathComponent()])
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "tray").font(OpsTheme.sidebarIcon).foregroundStyle(.secondary).frame(width: 16)
-                Text("Inbox").font(OpsTheme.rowFont).lineLimit(1)
-                Spacer(minLength: 4)
-                if store.inboxOpenCount > 0 {
-                    Text("\(store.inboxOpenCount)").font(OpsTheme.metaFont).foregroundStyle(.tertiary)
-                }
-            }
-            .padding(.horizontal, 8)
-            .frame(height: 30)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("Reports from readers, in _inbox/reports.md")
     }
 
     private var sectionHeader: some View {
@@ -88,6 +74,8 @@ struct SidebarView: View {
         return Button {
             state.selection = target
             state.selectedDocID = nil
+            state.driftPageID = nil
+            state.inboxReportID = nil
         } label: {
             HStack(spacing: 8) {
                 switch icon {

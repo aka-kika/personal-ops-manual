@@ -14,8 +14,8 @@ settings:
     SWIFT_VERSION: "6.0"
     MACOSX_DEPLOYMENT_TARGET: "26.0"
     PRODUCT_NAME: Personal Ops Manual
-    MARKETING_VERSION: "2.2.5"
-    CURRENT_PROJECT_VERSION: "10"
+    MARKETING_VERSION: "2.3.0"
+    CURRENT_PROJECT_VERSION: "11"
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: "-"
     ENABLE_HARDENED_RUNTIME: NO
@@ -34,6 +34,9 @@ targets:
         buildPhase: resources
       - path: OpsManual/Resources/mcp-install.txt
         buildPhase: resources
+      - path: docs/release-notes
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: swift-markdown
         product: Markdown
@@ -49,8 +52,8 @@ targets:
       properties:
         CFBundleName: Personal Ops Manual
         CFBundleDisplayName: Personal Ops Manual
-        CFBundleShortVersionString: "2.2.5"
-        CFBundleVersion: "10"
+        CFBundleShortVersionString: "2.3.0"
+        CFBundleVersion: "11"
         LSMinimumSystemVersion: "26.0"
         NSHighResolutionCapable: true
         NSPrincipalClass: NSApplication

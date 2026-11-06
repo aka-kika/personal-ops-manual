@@ -4,18 +4,19 @@ import AppKit
 struct ContentView: View {
     @Bindable var store: DocumentStore
     @Bindable var state: AppState
+    var drift: DriftMonitor
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var trashError: String?
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(store: store, state: state)
+            SidebarView(store: store, state: state, drift: drift)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
                 .titleBarColumn()
         } content: {
             HStack(spacing: 0) {
                 columnDivider
-                DocumentListView(store: store, state: state, onContextAction: handle)
+                contentColumn
             }
             .navigationSplitViewColumnWidth(min: 240, ideal: 300, max: 460)
             .titleBarColumn()
@@ -74,6 +75,35 @@ struct ContentView: View {
             }
         }
         .animation(.easeOut(duration: 0.12), value: state.isSearchPresented)
+        .task {
+            // Under unit tests the app is only the tests' host: no checks, no sheet, and
+            // nothing written to the real settings (What's new would count as seen).
+            guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+            drift.startSchedule { [store] in DriftMonitor.pages(from: store.documents) }
+            if WhatsNew.shouldShow() { state.whatsNew = WhatsNew.notes(for: WhatsNew.currentVersion) }
+        }
+        .onChange(of: state.selection) { _, selection in
+            // Opening Drift checks right away (the timer only covers the rest of the day).
+            if selection == .drift { Task { await drift.check(DriftMonitor.pages(from: store.documents)) } }
+        }
+        .onChange(of: store.documents) { _, docs in
+            drift.prune(keeping: Set(docs.filter { !$0.checks.isEmpty && !$0.isParked }.map(\.id)))
+        }
+        .sheet(isPresented: Binding(get: { state.whatsNew != nil }, set: { if !$0 { state.whatsNew = nil; WhatsNew.markSeen() } })) {
+            WhatsNewSheet(appName: "Personal Ops Manual", lines: state.whatsNew ?? []) {
+                state.whatsNew = nil
+                WhatsNew.markSeen()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var contentColumn: some View {
+        switch state.selection {
+        case .drift: DriftListView(store: store, state: state, drift: drift)
+        case .inbox: InboxListView(store: store, state: state)
+        default: DocumentListView(store: store, state: state, onContextAction: handle)
+        }
     }
 
     /// The split view's own divider after the sidebar is swallowed by the merged
@@ -89,7 +119,11 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detailColumn: some View {
-        if let id = state.selectedDocID, let doc = store.document(id: id) {
+        if state.selection == .drift && state.selectedDocID == nil {
+            DriftDetailView(store: store, state: state, drift: drift).titleBarColumn()
+        } else if state.selection == .inbox && state.selectedDocID == nil {
+            InboxDetailView(store: store, state: state).titleBarColumn()
+        } else if let id = state.selectedDocID, let doc = store.document(id: id) {
             ReaderView(doc: doc, store: store, state: state, onAction: handle).titleBarColumn()
         } else {
             EmptyState(text: "Select a document").titleBarColumn()
