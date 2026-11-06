@@ -253,8 +253,15 @@ final class ParkedPagesTests: XCTestCase {
 
         XCTAssertEqual(state.visibleDocuments(in: store).map(\.title), ["Feed"])
         XCTAssertEqual(store.categories.map(\.count), [1])
+        // A category whose pages are all parked leaves the sidebar.
+        try page("e5", "Golden regression set", status: "parked", checks: false)
+            .replacingOccurrences(of: "category: Services", with: "category: Skills")
+            .write(to: dir.appendingPathComponent("golden-e5.md"), atomically: true, encoding: .utf8)
+        store.load()
+        XCTAssertEqual(store.categories.map(\.name), ["Services"])
+        XCTAssertTrue(store.parkedDocuments.contains { $0.title == "Golden regression set" })
         state.selection = .parked
-        XCTAssertEqual(Set(state.visibleDocuments(in: store).map(\.title)), ["Reed", "Old"])
+        XCTAssertEqual(Set(state.visibleDocuments(in: store).map(\.title)), ["Reed", "Old", "Golden regression set"])
         XCTAssertEqual(DriftMonitor.pages(from: store.documents).map(\.title), ["Feed"])
         XCTAssertEqual(store.search("Reed").first?.title, "Reed")
 
