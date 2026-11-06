@@ -26,7 +26,6 @@ enum CategoryIcons {
         "Self-hosted": "internaldrive",
         "Services": "waveform.path.ecg",
         "Skills": "sparkles",
-        "TestFlight": "airplane",
     ]
 
     static func symbol(for category: String) -> String { map[category] ?? "folder" }
