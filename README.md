@@ -124,11 +124,16 @@ copied.
 
 GitHub pages show as one A to Z list, a lock or globe before each name and
 one dot when work is not saved yet; a repo's page shows its branch, uncommitted and unpushed
-work, latest tag, open pull requests and last build. The data comes from the
+work, latest tag, open pull requests and, when the repo has GitHub Actions, its last build. The data comes from the
 `gh` login already on the Mac and local `git`; the app holds no token. The two
 MCP categories share one row and one A to Z list (a small person mark on your
 own servers). A category with no page open shows what lives there, one status
-line with a small ring, segments or date line, and the newest changes. The Inbox row shows the reports inside the app.
+line with a small ring, segments or date line, and the newest changes; without an
+"<Category> overview" page it uses the category's page tagged `index`. The App Store
+category reads each app's state from `asc status` (on sale, waiting for review, in
+review, pending release, rejected) with days, version and price, when it opens and
+on Cmd-R. The Inbox row shows the reports inside the app; with no line picked, it
+shows `_inbox/reports.md` itself as a page.
 Pages with `status: parked` or `archived` sit under one Parked row.
 
 ## Install
